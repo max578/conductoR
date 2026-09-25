@@ -1,0 +1,16 @@
+# conductoR-package.R -- Package-level documentation.
+
+#' conductoR: perform a contract-typed analytical plan
+#'
+#' A plan ([oap_plan]) is a directed acyclic graph of nodes ([node()]), each
+#' bound to a tool that returns an [orchestraManifest::orchestra_manifest].
+#' [conduct()] performs it in topological order and refuses any handoff whose
+#' declared inferential target does not match what the upstream node emitted.
+#' Two operators are built in: an abstention gate that will not pass a null
+#' verdict the design could not have resolved, and a triangulation that
+#' reconciles any number of lenses on one question. A plan round-trips through
+#' YAML ([plan_to_yaml()], [plan_from_yaml()]) and compiles to a 'targets'
+#' pipeline ([compile_to_targets()]).
+#'
+#' @keywords internal
+"_PACKAGE"

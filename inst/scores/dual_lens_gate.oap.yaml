@@ -1,0 +1,61 @@
+id: dual_lens_gate
+meta:
+  question: Is there a causal treatment effect, corroborated across lenses?
+nodes:
+- id: mechanism
+  role: mechanism
+  operator: compute
+  emits: parameters
+  consumes: []
+  params: []
+  tool: tool_mechanism
+- id: ensemble
+  role: ensemble
+  operator: compute
+  emits: parameters
+  consumes:
+  - from: mechanism
+    contract: parameters
+  params: []
+  tool: tool_ensemble
+- id: lens_kernel
+  role: kernel_lens
+  operator: compute
+  emits: treatment_effects
+  consumes:
+  - from: mechanism
+    contract: parameters
+  - from: ensemble
+    contract: parameters
+  params: []
+  tool: tool_kernel_lens
+- id: lens_dynamic
+  role: dynamic_lens
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_dynamic_lens
+- id: gate
+  role: conductoR
+  operator: abstain_gate
+  emits: decisions
+  consumes:
+  - from: lens_kernel
+    contract: treatment_effects
+  params:
+    n_min: 25
+    z_floor: 2.0
+- id: consensus
+  role: conductoR
+  operator: triangulate
+  emits: decisions
+  consumes:
+  - from: lens_kernel
+    contract: treatment_effects
+  - from: lens_dynamic
+    contract: treatment_effects
+  - from: gate
+    contract: decisions
+  params: []
+

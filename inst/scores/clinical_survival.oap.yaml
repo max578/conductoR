@@ -1,0 +1,62 @@
+id: clinical_survival_decision
+meta:
+  question: Does the intervention improve survival, and should it be adopted?
+nodes:
+- id: cox
+  role: cox_lens
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_cox_lens
+- id: weibull
+  role: weibull_lens
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_weibull_lens
+- id: logrank
+  role: logrank_lens
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_logrank_lens
+- id: epv_gate
+  role: conductoR
+  operator: abstain_gate
+  emits: decisions
+  consumes:
+  - from: cox
+    contract: treatment_effects
+  params:
+    mode: flag
+    floors:
+      epv: 10.0
+- id: consensus
+  role: conductoR
+  operator: triangulate
+  emits: decisions
+  consumes:
+  - from: cox
+    contract: treatment_effects
+  - from: weibull
+    contract: treatment_effects
+  - from: logrank
+    contract: treatment_effects
+  - from: epv_gate
+    contract: decisions
+  params: []
+- id: decision
+  role: decision
+  operator: compute
+  emits: decisions
+  consumes:
+  - from: consensus
+    contract: decisions
+  - from: cox
+    contract: treatment_effects
+  params: []
+  tool: tool_decide
+

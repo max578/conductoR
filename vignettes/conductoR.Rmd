@@ -1,0 +1,200 @@
+---
+title: "Performing a typed analytical plan"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Performing a typed analytical plan}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<!-- Render time: under 1 s under rmarkdown::render(); macOS arm64, R 4.6.1,
+     one core. Two linear models and two rank correlations on 136 rows. -->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r library}
+library(conductoR)
+```
+
+## The question
+
+Does nitrogen rate affect maize yield? `agridat::hernandez.nitrogen` holds
+136 plots from five Minnesota sites, four replicates each, at nitrogen rates
+from 0 to 268 kg/ha. Two methods answer the question independently: the
+slope of a linear regression of yield on rate, and Kendall's rank
+correlation. A plan puts a power-aware gate on the rank lens, reconciles the
+two lenses, and turns the consensus into a recommendation.
+
+```{r data}
+data("hernandez.nitrogen", package = "agridat")
+d <- hernandez.nitrogen
+table(d$site, d$rep)
+```
+
+## The tools
+
+A tool is a function of `(inputs, data, node)` that returns an
+`orchestraManifest::orchestra_manifest`. `lens_to_manifest()` lifts a
+yes-or-no verdict into one; `decision_to_manifest()` does the same for a
+recommendation. The tools are registered by name so the plan can be written
+to a file.
+
+```{r tools}
+ols_lens <- function(inputs, data, node) {
+  fit <- lm(yield ~ nitro, data = data)
+  co  <- summary(fit)$coefficients["nitro", ]
+  p   <- unname(co["Pr(>|t|)"])
+  lens_to_manifest(
+    headline = if (p < 0.05) "effect" else "no_effect",
+    effect_present = p < 0.05, emitter = "ols", method = "ols:slope_t",
+    metrics = list(p_value = p, slope = unname(co["Estimate"]),
+                   effect_mean = unname(co["Estimate"]) * diff(range(data$nitro)),
+                   noise_sd = sigma(fit), n = nrow(data)))
+}
+
+rank_lens <- function(inputs, data, node) {
+  ct <- suppressWarnings(cor.test(data$nitro, data$yield, method = "kendall"))
+  lens_to_manifest(
+    headline = if (ct$p.value < 0.05) "effect" else "no_effect",
+    effect_present = ct$p.value < 0.05, emitter = "rank", method = "rank:kendall",
+    metrics = list(p_value = ct$p.value, tau = unname(ct$estimate),
+                   n = nrow(data)))
+}
+
+recommend <- function(inputs, data, node) {
+  consensus <- inputs$consensus@summary$headline
+  action <- switch(consensus,
+    causal_effect_corroborated = "apply_nitrogen",
+    no_effect_corroborated     = "withhold_nitrogen",
+    "insufficient_evidence")
+  decision_to_manifest(action, emitter = "agronomy", method = "agronomy:rule",
+                       metrics = list(consensus = consensus),
+                       consumed = list(inputs$consensus))
+}
+
+register_tool("ols_lens", ols_lens)
+register_tool("rank_lens", rank_lens)
+register_tool("recommend", recommend)
+```
+
+## The plan
+
+Five nodes. Each edge names the inferential target it expects from its
+source; the gate reads the rank lens and abstains when a null verdict comes
+from fewer than 25 plots or from a design that could not have resolved the
+implied effect.
+
+```{r plan}
+score <- oap_plan(
+  id = "nitrogen_response",
+  meta = list(question = "Does nitrogen rate affect maize yield?"),
+  nodes = list(
+    node("lens_ols",  "ols_lens",  emits = "treatment_effects", role = "regression"),
+    node("lens_rank", "rank_lens", emits = "treatment_effects", role = "rank"),
+    node("gate", operator = "abstain_gate", emits = "decisions",
+         consumes = list(edge("lens_rank", "treatment_effects")),
+         params = list(n_min = 25L, z_floor = 2, mode = "flag")),
+    node("consensus", operator = "triangulate", emits = "decisions",
+         consumes = list(edge("lens_ols", "treatment_effects"),
+                         edge("lens_rank", "treatment_effects"),
+                         edge("gate", "decisions"))),
+    node("decision", "recommend", emits = "decisions", role = "agronomy",
+         consumes = list(edge("consensus", "decisions")))
+  ))
+plan_order(score)
+```
+
+## Scenario A: the full trial
+
+```{r scenario_a}
+run_a <- conduct(score, data = d)
+run_a$terminal@summary$headline
+run_a$bus$consensus@summary$metrics[c("agree", "n_lenses")]
+```
+
+Both lenses find the effect, the gate passes, and the consensus is
+corroborated.
+
+## Scenario B: one site, one replicate, three rates
+
+```{r scenario_b}
+small <- d[d$site == "S1" & d$rep == "R1" & d$nitro <= 67.2, ]
+nrow(small)
+run_b <- conduct(score, data = small)
+run_b$bus$gate@summary$abstain_reason
+run_b$terminal@summary$headline
+```
+
+With three plots the rank test cannot reject, and the gate refuses to let
+that null through. In `flag` mode the consensus abstains and the
+recommendation is `insufficient_evidence`. Rerouting instead drops the gated
+lens and reconciles what survives.
+
+```{r scenario_b_reroute}
+gate <- plan_node(score, "gate")
+gate@params$mode <- "reroute"
+rerouted <- score
+rerouted@nodes[[3]] <- gate
+run_b2 <- conduct(rerouted, data = small, verbose = FALSE)
+run_b2$bus$consensus@summary$metrics[c("rerouted", "n_lenses")]
+run_b2$terminal@summary$headline
+```
+
+One lens on three plots is not a corroborated effect, so the recommendation
+is still to wait for evidence.
+
+## The plan as a file
+
+Because every compute node names its tool, the plan writes to YAML and
+reads back to the same run.
+
+```{r yaml}
+f <- tempfile(fileext = ".oap.yaml")
+plan_to_yaml(score, f)
+cat(readLines(f, n = 12), sep = "\n")
+again <- plan_from_yaml(f)
+run_c <- conduct(again, data = d, verbose = FALSE)
+identical(run_c$terminal@run_id, run_a$terminal@run_id)
+```
+
+## A mistyped edge
+
+An edge that declares the wrong contract is refused before the downstream
+node runs. Here the decision node is told to expect `parameters` from the
+consensus, which emits `decisions`.
+
+```{r violation}
+bad <- oap_plan(id = "mistyped", nodes = list(
+  node("lens_ols", "ols_lens", emits = "treatment_effects"),
+  node("decision", "recommend", emits = "decisions",
+       consumes = list(edge("lens_ols", "parameters")))
+))
+res <- try(conduct(bad, data = d, verbose = FALSE), silent = TRUE)
+cat(conditionMessage(attr(res, "condition")))
+```
+
+## Provenance and a targets pipeline
+
+Giving `conduct()` an `out_dir` writes `run.rds`, `run_card.md` and
+`provenance.md`, the last carrying the chain of payload hashes in execution
+order. `run_provenance()` returns the same table in the session.
+
+```{r provenance}
+run_provenance(run_a)[, c("node", "operator", "emits", "abstained")]
+```
+
+The same plan compiles to a `_targets.R` in which each node is one target
+calling `conduct_step()`, so a long-running plan inherits caching from the
+'targets' package.
+
+```{r targets, eval = FALSE}
+compile_to_targets(score, "_targets.R", preamble = c(
+  "library(conductoR)",
+  "source('tools.R')",
+  ".score <- plan_from_yaml('nitrogen_response.oap.yaml')",
+  ".data <- agridat::hernandez.nitrogen"))
+targets::tar_make()
+targets::tar_read_raw(terminal_target(score))
+```

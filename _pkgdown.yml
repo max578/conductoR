@@ -1,0 +1,35 @@
+url: ~
+template:
+  bootstrap: 5
+
+reference:
+- title: Declare a plan
+  contents:
+  - oap_plan
+  - oap_node
+  - node
+  - edge
+  - plan_order
+  - plan_node
+- title: Perform it
+  contents:
+  - conduct
+  - conduct_step
+  - run_provenance
+- title: Emit a manifest
+  contents:
+  - lens_to_manifest
+  - decision_to_manifest
+- title: Portable plans
+  contents:
+  - register_tool
+  - resolve_tool
+  - plan_to_yaml
+  - plan_from_yaml
+- title: targets backend
+  contents:
+  - compile_to_targets
+  - terminal_target
+- title: Package
+  contents:
+  - conductoR-package

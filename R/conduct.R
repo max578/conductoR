@@ -13,8 +13,7 @@
   if (contract != "any" && upstream@inferential_target != contract) {
     stop(sprintf(paste0("TYPED-EDGE VIOLATION -- node '%s' consumes '%s' as ",
                         "'%s', but '%s' emits inferential_target '%s'. ",
-                        "Refusing to run the step rather than coerce across ",
-                        "a contract boundary."),
+                        "The step is not run."),
                  to_id, from_id, contract, from_id,
                  upstream@inferential_target), call. = FALSE)
   }

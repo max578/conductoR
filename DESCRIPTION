@@ -1,0 +1,43 @@
+Package: conductoR
+Title: Perform a Contract-Typed Analytical Plan Across Analytics Components
+Version: 0.1.0
+Authors@R:
+    person(given = "Max",
+           family = "Moldovan",
+           email = "max.moldovan@adelaide.edu.au",
+           role = c("aut", "cre", "cph"),
+           comment = c(ORCID = "0000-0001-9680-8474"))
+Description: Declares an analytical plan as a directed acyclic graph of
+    nodes, each bound to a tool that returns an 'orchestraManifest' result,
+    and performs it in topological order. Every edge is typed by the
+    inferential target the upstream node declares, and a mismatched handoff
+    stops the run before the downstream node executes rather than coercing
+    across a contract boundary. Two epistemic operators are built in: a
+    power-aware abstention gate that refuses to pass a null verdict the
+    design could not have resolved, and a triangulation operator that
+    reconciles any number of independent lenses on one question. A plan
+    serialises to 'YAML' and back, compiles to a 'targets' pipeline, and
+    every run writes a provenance record with the integrity chain of the
+    manifests it produced.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Language: en-AU
+Roxygen: list(markdown = TRUE)
+Config/testthat/edition: 3
+Depends:
+    R (>= 4.3.0)
+Imports:
+    orchestraManifest (>= 0.1.0),
+    S7,
+    stats,
+    utils,
+    yaml
+Suggests:
+    agridat,
+    knitr,
+    PESTO,
+    rmarkdown,
+    targets,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/roxygen2/version: 8.1.0

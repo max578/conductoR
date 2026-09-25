@@ -1,0 +1,11 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.tar.gz
+*.Rcheck/
+.claude/
+.positai/
+.cursor/
+inst/doc
+docs/

@@ -1,0 +1,11 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^\.claude$
+^\.positai$
+^\.cursor$
+^\.github$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$
+^LICENSE\.md$
+^PROJECT_LOG.*\.md$

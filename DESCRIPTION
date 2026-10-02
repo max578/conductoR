@@ -20,6 +20,8 @@ Description: Declares an analytical plan as a directed acyclic graph of
     every run writes a provenance record with the integrity chain of the
     manifests it produced.
 License: MIT + file LICENSE
+URL: https://github.com/max578/conductoR
+BugReports: https://github.com/max578/conductoR/issues
 Encoding: UTF-8
 Language: en-AU
 Roxygen: list(markdown = TRUE)
@@ -40,4 +42,5 @@ Suggests:
     targets,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
+Remotes: max578/orchestraManifest
 Config/roxygen2/version: 8.1.0

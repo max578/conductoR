@@ -14,4 +14,4 @@ run  <- conduct(oap_plan(id = "one", nodes = list(lens, gate)), data = my_data)
 run$terminal@summary$headline
 ```
 
-Install from a local checkout with `R CMD INSTALL .` after installing `orchestraManifest`; see `vignette("conductoR")` for a worked example on `agridat::hernandez.nitrogen`. MIT licence.
+Install from GitHub with `remotes::install_github("max578/conductoR")`, which also installs `orchestraManifest`. See `vignette("conductoR")` for a worked example on `agridat::hernandez.nitrogen`. MIT licence.

@@ -42,5 +42,7 @@ Suggests:
     targets,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
-Remotes: max578/orchestraManifest
+Remotes:
+    max578/orchestraManifest,
+    max578/PESTO
 Config/roxygen2/version: 8.1.0

@@ -1,0 +1,17 @@
+year <- if (!is.null(meta$Date)) {
+  format(as.Date(meta$Date), "%Y")
+} else {
+  "2026"
+}
+
+authors <- as.person(eval(parse(text = meta$`Authors@R`)))
+cre <- authors[vapply(seq_along(authors), function(i) "cre" %in% authors[i]$role, logical(1))]
+
+bibentry(
+  bibtype = "Manual",
+  title = meta$Title,
+  author = cre,
+  year = year,
+  note = paste("R package version", meta$Version),
+  url = meta$URL
+)

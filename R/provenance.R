@@ -76,6 +76,9 @@ run_provenance <- function(run) {
     "---",
     "kind: run-provenance",
     sprintf("plan: %s", run$plan_id),
+    sprintf("plan_hash: %s", run$plan_hash %||% NA_character_),
+    sprintf("input_hash: %s", run$input_hash %||% NA_character_),
+    sprintf("label: %s", run$label %||% NA_character_),
     sprintf("nodes: %d", run$n_nodes),
     sprintf("skipped: %d", run$n_skipped %||% 0L),
     sprintf("terminal_run_id: %s", term@run_id),
@@ -96,4 +99,49 @@ run_provenance <- function(run) {
     "See `run_card.md` in this directory for the per-node table.")
   writeLines(c(fm, body), file.path(out_dir, "provenance.md"))
   invisible(out_dir)
+}
+
+#' Check that two runs used the same plan
+#'
+#' Compares the plan hashes and input hashes that [conduct()] records. The
+#' plan hash covers the plan and the code of every tool it references, so
+#' two runs with equal plan hashes ran the same analysis. Use it after a
+#' blinded analysis: the blinded run and the unblinded run should share a
+#' plan hash and differ in input hash.
+#'
+#' @param run_a,run_b Two runs returned by [conduct()].
+#'
+#' @returns A list with `same_plan` and `same_input` (logical), and the four
+#'   hashes and two labels compared.
+#'
+#' @seealso [conduct()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest(if (mean(data$d) > 0) "effect" else "no_effect",
+#'                    mean(data$d) > 0, "demo", "demo:mean")
+#' }
+#' p <- oap_plan(id = "blind_demo", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects")))
+#' d <- c(0.3, 0.1, 0.2, 0.4)
+#' flip <- c(1, -1, -1, 1)
+#' blinded <- conduct(p, data = list(d = d * flip), verbose = FALSE,
+#'                    label = "blinded")
+#' unblinded <- conduct(p, data = list(d = d), verbose = FALSE,
+#'                      label = "unblinded")
+#' same_plan(blinded, unblinded)$same_plan
+#'
+#' @export
+same_plan <- function(run_a, run_b) {
+  stopifnot(is.list(run_a), is.list(run_b))
+  list(same_plan  = identical(run_a$plan_hash, run_b$plan_hash),
+       same_input = identical(run_a$input_hash, run_b$input_hash),
+       plan_hash  = c(run_a$plan_hash %||% NA_character_,
+                      run_b$plan_hash %||% NA_character_),
+       input_hash = c(run_a$input_hash %||% NA_character_,
+                      run_b$input_hash %||% NA_character_),
+       label      = c(run_a$label %||% NA_character_,
+                      run_b$label %||% NA_character_))
 }

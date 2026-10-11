@@ -134,13 +134,25 @@ conduct_step <- function(node, inputs = list(), data = list()) {
 #' @param out_dir A directory to write the provenance record into, or `NULL`
 #'   to write nothing. See [run_provenance()] for the files.
 #' @param verbose Print one line per node as it runs.
+#' @param label A short string stored with the run, such as `"blinded"` or
+#'   `"unblinded"`, or `NULL`.
 #'
-#' @returns A list with elements `plan_id`, `bus` (the manifest each node
-#'   emitted, named by node id), `provenance` (one record per node),
-#'   `n_nodes`, `n_skipped`, `seconds` and `terminal` (the manifest of the
-#'   last node that ran). Returned invisibly.
+#' @section Blinded runs:
+#' Every run records `input_hash`, a SHA-256 of `data`, and `plan_hash`, a
+#' SHA-256 of the plan together with the code of every tool it references
+#' (see [same_plan()]). To blind an analysis, run the plan on data whose
+#' treatment labels are hidden, freeze the plan, then run it once on the
+#' true data. [same_plan()] then shows that both runs used one plan on
+#' different data.
 #'
-#' @seealso [conduct_step()], [run_provenance()], [plan_to_yaml()].
+#' @returns A list with elements `plan_id`, `plan_hash`, `input_hash`,
+#'   `label`, `bus` (the manifest each node emitted, named by node id),
+#'   `provenance` (one record per node), `n_nodes`, `n_skipped`, `seconds`
+#'   and `terminal` (the manifest of the last node that ran). Returned
+#'   invisibly.
+#'
+#' @seealso [conduct_step()], [run_provenance()], [plan_to_yaml()],
+#'   [same_plan()].
 #'
 #' @author Max Moldovan
 #'
@@ -162,8 +174,12 @@ conduct_step <- function(node, inputs = list(), data = list()) {
 #' run$terminal@summary$headline
 #'
 #' @export
-conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE) {
+conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
+                    label = NULL) {
   stopifnot(S7::S7_inherits(plan, oap_plan))
+  if (!is.null(label)) stopifnot(is.character(label), length(label) == 1L)
+  plan_hash  <- .plan_hash(plan)
+  input_hash <- .object_hash(data)
   order    <- plan_order(plan)
   by_id    <- stats::setNames(plan@nodes, .node_ids(plan))
   children <- .child_map(plan)
@@ -213,7 +229,9 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE) {
 
   total <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
   terminal <- if (!is.na(last_produced)) bus[[last_produced]] else NULL
-  run <- list(plan_id = plan@id, bus = bus, provenance = prov,
+  run <- list(plan_id = plan@id, plan_hash = plan_hash,
+              input_hash = input_hash, label = label %||% NA_character_,
+              bus = bus, provenance = prov,
               n_nodes = length(order), n_skipped = length(skipped),
               seconds = round(total, 3), terminal = terminal)
   if (!is.null(out_dir)) .write_provenance(run, out_dir)

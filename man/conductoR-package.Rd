@@ -16,6 +16,14 @@ reconciles any number of lenses on one question. A plan round-trips through
 YAML (\code{\link[=plan_to_yaml]{plan_to_yaml()}}, \code{\link[=plan_from_yaml]{plan_from_yaml()}}) and compiles to a 'targets'
 pipeline (\code{\link[=compile_to_targets]{compile_to_targets()}}).
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/max578/conductoR}
+  \item Report bugs at \url{https://github.com/max578/conductoR/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Max Moldovan \email{max.moldovan@adelaide.edu.au} (\href{https://orcid.org/0000-0001-9680-8474}{ORCID}) [copyright holder]
 

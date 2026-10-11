@@ -1,3 +1,11 @@
+# conductoR (development version)
+
+* `conduct()` records `plan_hash` (the plan and the code of every tool it
+  references), `input_hash` (the data) and an optional `label` with each run,
+  and writes them into `provenance.md`.
+* New `same_plan()` compares two runs, so a blinded run and the unblinded run
+  that follows it can be shown to share one plan.
+
 # conductoR 0.1.0
 
 First release.

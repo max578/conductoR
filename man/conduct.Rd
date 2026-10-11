@@ -4,7 +4,7 @@
 \alias{conduct}
 \title{Perform a plan}
 \usage{
-conduct(plan, data = list(), out_dir = NULL, verbose = TRUE)
+conduct(plan, data = list(), out_dir = NULL, verbose = TRUE, label = NULL)
 }
 \arguments{
 \item{plan}{An \link{oap_plan}.}
@@ -15,12 +15,16 @@ conduct(plan, data = list(), out_dir = NULL, verbose = TRUE)
 to write nothing. See \code{\link[=run_provenance]{run_provenance()}} for the files.}
 
 \item{verbose}{Print one line per node as it runs.}
+
+\item{label}{A short string stored with the run, such as \code{"blinded"} or
+\code{"unblinded"}, or \code{NULL}.}
 }
 \value{
-A list with elements \code{plan_id}, \code{bus} (the manifest each node
-emitted, named by node id), \code{provenance} (one record per node),
-\code{n_nodes}, \code{n_skipped}, \code{seconds} and \code{terminal} (the manifest of the
-last node that ran). Returned invisibly.
+A list with elements \code{plan_id}, \code{plan_hash}, \code{input_hash},
+\code{label}, \code{bus} (the manifest each node emitted, named by node id),
+\code{provenance} (one record per node), \code{n_nodes}, \code{n_skipped}, \code{seconds}
+and \code{terminal} (the manifest of the last node that ran). Returned
+invisibly.
 }
 \description{
 Walks the plan in topological order and performs each node with
@@ -55,6 +59,16 @@ one gate. It emits one of seven consensus headlines:
 mode, or no lens survived a reroute).
 }
 
+\section{Blinded runs}{
+
+Every run records \code{input_hash}, a SHA-256 of \code{data}, and \code{plan_hash}, a
+SHA-256 of the plan together with the code of every tool it references
+(see \code{\link[=same_plan]{same_plan()}}). To blind an analysis, run the plan on data whose
+treatment labels are hidden, freeze the plan, then run it once on the
+true data. \code{\link[=same_plan]{same_plan()}} then shows that both runs used one plan on
+different data.
+}
+
 \examples{
 lens_a <- function(inputs, data, node) {
   lens_to_manifest("effect", TRUE, "lens_a", "lens_a:demo")
@@ -74,7 +88,8 @@ run$terminal@summary$headline
 
 }
 \seealso{
-\code{\link[=conduct_step]{conduct_step()}}, \code{\link[=run_provenance]{run_provenance()}}, \code{\link[=plan_to_yaml]{plan_to_yaml()}}.
+\code{\link[=conduct_step]{conduct_step()}}, \code{\link[=run_provenance]{run_provenance()}}, \code{\link[=plan_to_yaml]{plan_to_yaml()}},
+\code{\link[=same_plan]{same_plan()}}.
 }
 \author{
 Max Moldovan

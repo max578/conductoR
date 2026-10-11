@@ -23,3 +23,39 @@
 .edge_sources <- function(node) {
   vapply(node@consumes, function(e) e$from, character(1))
 }
+
+# SHA-256 of any R object, computed by the contract's own payload hash with
+# the object in the outputs slot.
+.object_hash <- function(x) {
+  orchestraManifest::manifest_data_hash(data.frame(), list(x), NULL, NULL,
+                                        NA_integer_)
+}
+
+# The code a tool reference stands for: a script's text, a package
+# function's body with the package version, or a closure's deparsed body.
+.tool_code <- function(n) {
+  ref <- n@tool_ref
+  if (!nzchar(ref)) return(deparse(n@tool))
+  if (startsWith(ref, "script:")) {
+    path <- path.expand(strsplit(sub("^script:", "", ref), "::",
+                                 fixed = TRUE)[[1]][1])
+    return(if (file.exists(path)) readLines(path, warn = FALSE) else NA)
+  }
+  if (grepl("::", ref, fixed = TRUE)) {
+    pkg <- strsplit(ref, "::", fixed = TRUE)[[1]][1]
+    return(c(pkg, as.character(utils::packageVersion(pkg)),
+             deparse(resolve_tool(ref))))
+  }
+  deparse(resolve_tool(ref))
+}
+
+# SHA-256 of a plan: its nodes, edges, parameters and the code each node
+# runs, so editing a tool changes the hash as surely as editing the plan.
+.plan_hash <- function(plan) {
+  spec <- lapply(plan@nodes, function(n) {
+    list(id = n@id, role = n@role, operator = n@operator, emits = n@emits,
+         consumes = n@consumes, params = n@params, tool_ref = n@tool_ref,
+         code = if (n@operator == "compute") .tool_code(n) else NULL)
+  })
+  .object_hash(list(id = plan@id, nodes = spec))
+}

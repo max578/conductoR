@@ -1,8 +1,4 @@
 id: C2_v1.2
-meta:
-  question: What is the average effect of sowing wheat in the Early rather than the
-    Main window, where does it differ, and what is it worth?
-  addendum: studies/C2/plan_C2_v1.2_addendum.md
 nodes:
 - id: pc_L1
   role: positive_control

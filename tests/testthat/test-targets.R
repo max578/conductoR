@@ -12,6 +12,16 @@ test_that("a compiled script names one target per node with its dependencies", {
   expect_identical(terminal_target(p), "n_b")
 })
 
+# Only under devtools::load_all(): saving a plan from a source-loaded package warns that the package may not
+# be available when loading; the installed package does not warn.
+muffle_load_all <- function(expr) {
+  withCallingHandlers(expr, warning = function(w) {
+    if (grepl("may not be available when loading", conditionMessage(w), fixed = TRUE)) {
+      invokeRestart("muffleWarning")
+    }
+  })
+}
+
 test_that("a compiled plan runs under targets to the same verdict as conduct()", {
   skip_if_not_installed("targets")
   p <- oap_plan(id = "tar", nodes = list(
@@ -24,14 +34,14 @@ test_that("a compiled plan runs under targets to the same verdict as conduct()",
 
   dir <- withr_tempfile()
   dir.create(dir)
-  saveRDS(p, file.path(dir, "plan.rds"))
+  muffle_load_all(saveRDS(p, file.path(dir, "plan.rds")))
   script <- file.path(dir, "_targets.R")
   store  <- file.path(dir, "_targets")
   compile_to_targets(p, script, preamble = c(
     sprintf(".score <- readRDS(%s)", deparse(file.path(dir, "plan.rds"))),
     ".data <- list()"))
-  targets::tar_make(script = script, store = store, callr_function = NULL,
-                    reporter = "silent")
+  muffle_load_all(targets::tar_make(script = script, store = store, callr_function = NULL,
+                                    reporter = "silent"))
   out <- targets::tar_read_raw(terminal_target(p), store = store)
   expect_identical(out@run_id, direct$terminal@run_id)
   expect_identical(out@summary$headline, "single_lens_effect")

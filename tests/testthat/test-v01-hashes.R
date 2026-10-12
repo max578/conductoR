@@ -18,7 +18,7 @@ test_that("C1 every v0.1 plan loads under 0.2.0 with its 0.1.0 hash", {
 })
 
 test_that("C1 a v0.1 plan written by 0.2.0 still says nothing about v0.2", {
-  f <- test_path("fixtures", "plan_C2_v1.2.yaml")
+  f <- test_path("fixtures", "field_study_v0.1.oap.yaml")
   txt <- plan_to_yaml(plan_from_yaml(f))
   expect_false(grepl("plan_version", txt, fixed = TRUE))
 })

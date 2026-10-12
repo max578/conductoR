@@ -554,7 +554,7 @@
 #' structure checks follow the JSON Schema returned by [plan_schema()].
 #'
 #' @param x The path of a `.yaml`, `.yml` or `.json` plan file, or the plan's
-#'   text. Text that starts with `{` is read as JSON.
+#'   text. Text that starts with an opening brace is read as JSON.
 #'
 #' @returns A data frame with one row per problem and the columns `field`,
 #'   `node` (empty for a plan-level field), `rule` and `fix`. A valid plan

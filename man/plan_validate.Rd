@@ -6,6 +6,10 @@
 \usage{
 plan_validate(x)
 }
+\arguments{
+\item{x}{The path of a \code{.yaml}, \code{.yml} or \code{.json} plan file, or the plan's
+text. Text that starts with an opening brace is read as JSON.}
+}
 \value{
 A data frame with one row per problem and the columns \code{field},
 \code{node} (empty for a plan-level field), \code{rule} and \code{fix}. A valid plan

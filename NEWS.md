@@ -56,9 +56,8 @@
 
 * `compile_to_targets()` refuses a plan that uses `when`, `foreach` or
   `on_refusal` with an error of class `conductoR_unsupported`.
-* The `targets` test writes the plan path with `deparse()`, so a Windows
-  path such as `C:\Users\...` is no longer read as a `\U` escape; this was
-  the error on every Windows build on r-universe.
+* Windows builds no longer fail the `targets` test: the test writes the plan
+  path with `deparse()`, so `C:\Users` is not read as a `\U` escape.
 
 # conductoR 0.1.0
 

@@ -370,7 +370,7 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
       stop(sprintf(paste0("node '%s' takes its items from column '%s' of ",
                           "'%s', which has no such column; its columns ",
                           "are: %s"), n@id, fe$column, fe$from,
-                   if (ncol(tab)) paste(names(tab), collapse = ", ") else "(none)"),
+                   .col_names(tab)),
            call. = FALSE)
     }
     vals <- tab[[fe$column]]
@@ -396,9 +396,9 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
   for (it in its) {
     inst <- sprintf("%s[%s]", n@id, as.character(it))
     if (halted) {
-      rows[[length(rows) + 1L]] <- list(item = as.character(it), instance = inst,
-                                        status = "skipped", run_id = NA_character_,
-                                        headline = NA_character_, manifest = NULL)
+      rows[[length(rows) + 1L]] <- list(
+        item = as.character(it), instance = inst, status = "skipped",
+        run_id = NA_character_, headline = NA_character_, manifest = NULL)
       next
     }
     ni <- n
@@ -419,7 +419,8 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
   man <- foreach_to_manifest(n, rows, n@emits)
   tab <- man@params
   list(manifest = man, refused = refused,
-       table = data.frame(node = rep(n@id, nrow(tab)), tab[, c("item", "instance",
-                                                              "status", "run_id")],
-                          stringsAsFactors = FALSE))
+       table = data.frame(
+         node = rep(n@id, nrow(tab)),
+         tab[, c("item", "instance", "status", "run_id")],
+         stringsAsFactors = FALSE))
 }

@@ -58,7 +58,8 @@ run_provenance <- function(run) {
   skipped <- Filter(function(p) identical(p$status, "skipped"), run$provenance)
   if (length(skipped)) {
     out <- c(out, "", "### Skipped nodes", "", "| node | reason |", "|---|---|",
-             vapply(skipped, function(p) sprintf("| %s | %s |", p$node, p$reason),
+             vapply(skipped,
+                    function(p) sprintf("| %s | %s |", p$node, p$reason),
                     character(1)))
   }
   cd <- run$conditions
@@ -94,7 +95,8 @@ run_provenance <- function(run) {
       p$emits, p$run_id, p$abstained, p$seconds))
   }
   lines <- c(lines, "",
-             sprintf("**Terminal verdict** (`%s`): %s", .term_id(term), verdict),
+             sprintf("**Terminal verdict** (`%s`): %s", .term_id(term),
+                     verdict),
              .v02_sections(run))
   writeLines(lines, file.path(out_dir, "run_card.md"))
   .write_provenance_record(run, out_dir)
@@ -122,7 +124,9 @@ run_provenance <- function(run) {
     sprintf("terminal_run_id: %s", .term_id(term)),
     sprintf("terminal_verdict: \"%s\"", verdict),
     sprintf("abstained: %s", !is.null(term) && isTRUE(term@summary$abstained)),
-    if (!is.na(run$stopped_by %||% NA)) sprintf("stopped_by: %s", run$stopped_by),
+    if (!is.na(run$stopped_by %||% NA)) {
+      sprintf("stopped_by: %s", run$stopped_by)
+    },
     "---", "")
   body <- c(
     sprintf("## Run provenance: plan `%s`", run$plan_id),

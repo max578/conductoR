@@ -139,7 +139,7 @@
       stop(sprintf(paste0("select '%s': the rule reads column '%s', which ",
                           "'%s' does not have; its columns are: %s"),
                    node@id, name, src_id,
-                   if (ncol(tab)) paste(names(tab), collapse = ", ") else "(none)"),
+                   .col_names(tab)),
            call. = FALSE)
     }
     tab[[name]]

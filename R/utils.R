@@ -61,3 +61,8 @@
   })
   .object_hash(list(id = plan@id, nodes = spec))
 }
+
+# Column names of a table for an error message.
+.col_names <- function(tab) {
+  if (ncol(tab)) paste(names(tab), collapse = ", ") else "(none)"
+}

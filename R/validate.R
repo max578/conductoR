@@ -2,11 +2,22 @@
 # at once. Mirrors inst/schema/; references, cycles and conditions only here.
 
 .PLAN_FIELDS <- c("id", "plan_version", "meta", "nodes")
-.NODE_FIELDS <- c("id", "role", "tool", "operator", "emits", "consumes",
-                  "params", "when", "foreach", "foreach_max", "on_refusal")
-.ON_REFUSAL  <- c("continue", "halt-branch", "stop")
-.GATE_MODES  <- c("flag", "halt-branch", "reroute")
-.YAML_MARK   <- "\001"
+.NODE_FIELDS <- c(
+  "id",
+  "role",
+  "tool",
+  "operator",
+  "emits",
+  "consumes",
+  "params",
+  "when",
+  "foreach",
+  "foreach_max",
+  "on_refusal"
+)
+.ON_REFUSAL <- c("continue", "halt-branch", "stop")
+.GATE_MODES <- c("flag", "halt-branch", "reroute")
+.YAML_MARK <- "\001"
 .SCI_PATTERN <- "^[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)[eE][-+]?[0-9]+$"
 
 .prob <- function(field, rule, fix) list(field = field, rule = rule, fix = fix)
@@ -14,7 +25,8 @@
 .is_string <- function(x) is.character(x) && length(x) == 1L && !is.na(x)
 
 .is_map <- function(x) {
-  is.list(x) && (length(x) == 0L || (!is.null(names(x)) && all(nzchar(names(x)))))
+  is.list(x) &&
+    (length(x) == 0L || (!is.null(names(x)) && all(nzchar(names(x)))))
 }
 
 .is_whole <- function(x) {
@@ -29,10 +41,16 @@
 # are kept as marked text, so the validator can name them.
 .yaml_handlers <- function() {
   word <- function(x) paste0(.YAML_MARK, "word:", x)
-  num  <- function(x) paste0(.YAML_MARK, "number:", x)
-  list("bool#yes" = word, "bool#no" = word, "float#exp" = num,
-       "int#hex" = num, "int#oct" = num, "int#base60" = num,
-       "float#base60" = num)
+  num <- function(x) paste0(.YAML_MARK, "number:", x)
+  list(
+    "bool#yes" = word,
+    "bool#no" = word,
+    "float#exp" = num,
+    "int#hex" = num,
+    "int#oct" = num,
+    "int#base60" = num,
+    "float#base60" = num
+  )
 }
 
 .read_yaml_spec <- function(x) {
@@ -44,18 +62,26 @@
       yaml::yaml.load(x, handlers = .yaml_handlers())
     },
     error = function(e) {
-      stop(sprintf("the plan is not valid YAML: %s", conditionMessage(e)),
-           call. = FALSE)
-    })
+      stop(
+        sprintf("the plan is not valid YAML: %s", conditionMessage(e)),
+        call. = FALSE
+      )
+    }
+  )
 }
 
 # JSON arrays of scalars of one type become vectors, as YAML sequences do,
 # so one plan reads the same from either spelling.
 .simplify_json <- function(x) {
-  if (!is.list(x)) return(x)
+  if (!is.list(x)) {
+    return(x)
+  }
   x <- lapply(x, .simplify_json)
-  if (length(x) > 0L && is.null(names(x)) &&
-      all(vapply(x, function(e) is.atomic(e) && length(e) == 1L, logical(1)))) {
+  if (
+    length(x) > 0L &&
+      is.null(names(x)) &&
+      all(vapply(x, function(e) is.atomic(e) && length(e) == 1L, logical(1)))
+  ) {
     cls <- unique(vapply(x, function(e) class(e)[1], character(1)))
     if (length(cls) == 1L) return(unlist(x))
   }
@@ -63,14 +89,20 @@
 }
 
 .read_json_spec <- function(x) {
-  is_file <- length(x) == 1L && !grepl("\n", x, fixed = TRUE) &&
-    !startsWith(trimws(x), "{") && file.exists(x)
+  is_file <- length(x) == 1L &&
+    !grepl("\n", x, fixed = TRUE) &&
+    !startsWith(trimws(x), "{") &&
+    file.exists(x)
   txt <- if (is_file) paste(readLines(x, warn = FALSE), collapse = "\n") else x
-  spec <- tryCatch(jsonlite::fromJSON(txt, simplifyVector = FALSE),
-                   error = function(e) {
-                     stop(sprintf("the plan is not valid JSON: %s",
-                                  conditionMessage(e)), call. = FALSE)
-                   })
+  spec <- tryCatch(
+    jsonlite::fromJSON(txt, simplifyVector = FALSE),
+    error = function(e) {
+      stop(
+        sprintf("the plan is not valid JSON: %s", conditionMessage(e)),
+        call. = FALSE
+      )
+    }
+  )
   .simplify_json(spec)
 }
 
@@ -103,45 +135,80 @@
     }
     return(x)
   }
-  if (!is.character(x) || length(x) == 0L) return(x)
+  if (!is.character(x) || length(x) == 0L) {
+    return(x)
+  }
   marked <- startsWith(x, .YAML_MARK)
   sci <- !marked & grepl(.SCI_PATTERN, x)
-  if (!any(marked | sci)) return(x)
+  if (!any(marked | sci)) {
+    return(x)
+  }
   out <- as.list(x)
   for (i in seq_along(x)) {
     p <- if (length(x) > 1L) sprintf("%s[%d]", path, i) else path
     if (sci[i]) {
-      env$add(p, sprintf(paste0("`%s` is a number in scientific notation, ",
-                                "which is read as text"), x[i]),
-              sprintf("write the number plainly: %s", .plain_number(x[i])))
+      env$add(
+        p,
+        sprintf(
+          paste0(
+            "`%s` is a number in scientific notation, ",
+            "which is read as text"
+          ),
+          x[i]
+        ),
+        sprintf("write the number plainly: %s", .plain_number(x[i]))
+      )
     } else if (marked[i]) {
       body <- sub(paste0("^", .YAML_MARK), "", x[i])
       kind <- sub(":.*$", "", body)
-      val  <- sub("^[a-z]+:", "", body)
+      val <- sub("^[a-z]+:", "", body)
       out[[i]] <- val
       if (kind == "word" && tolower(val) %in% c("true", "false")) {
         out[[i]] <- tolower(val) == "true"
       } else if (kind == "word") {
-        env$add(p, sprintf(paste0("`%s` is written without quotes, and YAML ",
-                                  "reads it as a logical"), val),
-                sprintf("write true or false for a logical, or \"%s\" in quotes for text", val))
+        env$add(
+          p,
+          sprintf(
+            paste0(
+              "`%s` is written without quotes, and YAML ",
+              "reads it as a logical"
+            ),
+            val
+          ),
+          sprintf(
+            "write true or false for a logical, or \"%s\" in quotes for text",
+            val
+          )
+        )
       } else if (grepl("[eE]", val)) {
-        env$add(p, sprintf("`%s` is in scientific notation", val),
-                sprintf("write the number plainly: %s", .plain_number(val)))
+        env$add(
+          p,
+          sprintf("`%s` is in scientific notation", val),
+          sprintf("write the number plainly: %s", .plain_number(val))
+        )
       } else {
-        env$add(p, sprintf("`%s` is not a plain decimal number", val),
-                "write the number in plain decimal digits, or quote it for text")
+        env$add(
+          p,
+          sprintf("`%s` is not a plain decimal number", val),
+          "write the number in plain decimal digits, or quote it for text"
+        )
       }
     }
   }
-  if (all(vapply(out, is.logical, logical(1)))) return(unlist(out))
-  if (all(vapply(out, is.character, logical(1)))) return(unlist(out))
+  if (all(vapply(out, is.logical, logical(1)))) {
+    return(unlist(out))
+  }
+  if (all(vapply(out, is.character, logical(1)))) {
+    return(unlist(out))
+  }
   out
 }
 
 .plain_number <- function(x) {
   v <- suppressWarnings(as.numeric(x))
-  if (is.na(v)) return("digits only")
+  if (is.na(v)) {
+    return("digits only")
+  }
   format(v, scientific = FALSE, trim = TRUE, digits = 15)
 }
 
@@ -158,85 +225,220 @@
 }
 
 # Rules of the v0.2 fields of one node. Returns a list of problems.
-.node_rules <- function(id, operator, emits, consumes, params, when, foreach,
-                        foreach_max, on_refusal) {
+.node_rules <- function(
+  id,
+  operator,
+  emits,
+  consumes,
+  params,
+  when,
+  foreach,
+  foreach_max,
+  on_refusal
+) {
   out <- list()
-  froms <- vapply(consumes, function(e) as.character(e$from %||% ""),
-                  character(1))
+  froms <- vapply(
+    consumes,
+    function(e) as.character(e$from %||% ""),
+    character(1)
+  )
   if (identical(operator, "select")) {
     if (length(consumes) != 1L) {
-      out <- c(out, list(.prob("consumes", "a select node consumes exactly one node",
-                               "list the one node whose rows it selects")))
+      out <- c(
+        out,
+        list(.prob(
+          "consumes",
+          "a select node consumes exactly one node",
+          "list the one node whose rows it selects"
+        ))
+      )
     }
     if (!.is_string(params$rule)) {
-      out <- c(out, list(.prob("params.rule", "a select node needs a rule",
-                               "write the rule as a quoted string: \"p_value < 0.05\"")))
+      out <- c(
+        out,
+        list(.prob(
+          "params.rule",
+          "a select node needs a rule",
+          "write the rule as a quoted string: \"p_value < 0.05\""
+        ))
+      )
     } else {
       for (m in .cond_check(params$rule, "rule")$problems) {
-        out <- c(out, list(.prob("params.rule", m, .cond_fix(m, sprintf(
-          "a rule may use column names and %s", .COND_ALLOWED)))))
+        out <- c(
+          out,
+          list(.prob(
+            "params.rule",
+            m,
+            .cond_fix(
+              m,
+              sprintf(
+                "a rule may use column names and %s",
+                .COND_ALLOWED
+              )
+            )
+          ))
+        )
       }
     }
-    contract <- if (length(consumes) == 1L) consumes[[1]]$contract %||% "any" else "any"
+    contract <- if (length(consumes) == 1L) {
+      consumes[[1]]$contract %||% "any"
+    } else {
+      "any"
+    }
     if (!emits %in% c("any", contract) && contract != "any") {
-      out <- c(out, list(.prob("emits", sprintf(
-        "a select node emits what it consumes ('%s'), not '%s'", contract, emits),
-        sprintf("set emits to \"%s\"", contract))))
+      out <- c(
+        out,
+        list(.prob(
+          "emits",
+          sprintf(
+            "a select node emits what it consumes ('%s'), not '%s'",
+            contract,
+            emits
+          ),
+          sprintf("set emits to \"%s\"", contract)
+        ))
+      )
     }
   }
   if (nzchar(when)) {
     for (m in .cond_check(when, "when")$problems) {
-      out <- c(out, list(.prob("when", m, .cond_fix(m, sprintf(
-        "a condition may use <node>.headline, <node>.abstained, <node>.n_rows, <node>.metrics.<name>, literals and %s",
-        .COND_ALLOWED)))))
+      out <- c(
+        out,
+        list(.prob(
+          "when",
+          m,
+          .cond_fix(
+            m,
+            sprintf(
+              paste(
+                "a condition may use <node>.headline, <node>.abstained,",
+                "<node>.n_rows, <node>.metrics.<name>, literals and %s"
+              ),
+              .COND_ALLOWED
+            )
+          )
+        ))
+      )
     }
   }
   if (!on_refusal %in% .ON_REFUSAL) {
-    out <- c(out, list(.prob("on_refusal", sprintf("`%s` is not a refusal policy", on_refusal),
-                             "use continue, halt-branch or stop")))
+    out <- c(
+      out,
+      list(.prob(
+        "on_refusal",
+        sprintf("`%s` is not a refusal policy", on_refusal),
+        "use continue, halt-branch or stop"
+      ))
+    )
   }
   if (!.is_whole(foreach_max) || foreach_max < 1) {
-    out <- c(out, list(.prob("foreach_max", "must be a whole number of at least 1",
-                             "write a plain whole number; the default is 50")))
+    out <- c(
+      out,
+      list(.prob(
+        "foreach_max",
+        "must be a whole number of at least 1",
+        "write a plain whole number; the default is 50"
+      ))
+    )
   }
   if (!is.null(foreach)) {
     if (!identical(operator, "compute")) {
-      out <- c(out, list(.prob("foreach", "only a compute node can run once per item",
-                               "move foreach to the compute node that does the work")))
+      out <- c(
+        out,
+        list(.prob(
+          "foreach",
+          "only a compute node can run once per item",
+          "move foreach to the compute node that does the work"
+        ))
+      )
     }
     if (identical(emits, "any")) {
-      out <- c(out, list(.prob("emits", "a foreach node must declare what it emits",
-                               "set emits to the inferential target its tool returns")))
+      out <- c(
+        out,
+        list(.prob(
+          "emits",
+          "a foreach node must declare what it emits",
+          "set emits to the inferential target its tool returns"
+        ))
+      )
     }
     if (!is.null(params$item)) {
-      out <- c(out, list(.prob("params.item", "foreach sets params.item for each item",
-                               "remove item from params")))
+      out <- c(
+        out,
+        list(.prob(
+          "params.item",
+          "foreach sets params.item for each item",
+          "remove item from params"
+        ))
+      )
     }
     if (!is.null(names(foreach))) {
-      if (!setequal(names(foreach), c("from", "column")) ||
-          !.is_string(foreach$from) || !.is_string(foreach$column)) {
-        out <- c(out, list(.prob("foreach", "a foreach from a result needs exactly `from` and `column`",
-                                 "write foreach: {from: <node id>, column: <column name>}")))
+      if (
+        !setequal(names(foreach), c("from", "column")) ||
+          !.is_string(foreach$from) ||
+          !.is_string(foreach$column)
+      ) {
+        out <- c(
+          out,
+          list(.prob(
+            "foreach",
+            "a foreach from a result needs exactly `from` and `column`",
+            "write foreach: {from: <node id>, column: <column name>}"
+          ))
+        )
       } else if (!foreach$from %in% froms) {
-        out <- c(out, list(.prob("foreach.from", sprintf(
-          "'%s' is not a node this node consumes", foreach$from),
-          sprintf("add an edge from '%s' to consumes", foreach$from))))
+        out <- c(
+          out,
+          list(.prob(
+            "foreach.from",
+            sprintf(
+              "'%s' is not a node this node consumes",
+              foreach$from
+            ),
+            sprintf("add an edge from '%s' to consumes", foreach$from)
+          ))
+        )
       }
     } else {
-      ok <- vapply(foreach, function(e) {
-        (is.character(e) || is.numeric(e)) && length(e) == 1L && !is.na(e)
-      }, logical(1))
+      ok <- vapply(
+        foreach,
+        function(e) {
+          (is.character(e) || is.numeric(e)) && length(e) == 1L && !is.na(e)
+        },
+        logical(1)
+      )
       if (!all(ok)) {
-        out <- c(out, list(.prob("foreach", "every item must be a single string or number",
-                                 "write the items as a list of plain values")))
+        out <- c(
+          out,
+          list(.prob(
+            "foreach",
+            "every item must be a single string or number",
+            "write the items as a list of plain values"
+          ))
+        )
       } else if (anyDuplicated(vapply(foreach, as.character, character(1)))) {
-        out <- c(out, list(.prob("foreach", "items must be distinct",
-                                 "remove the repeated items")))
+        out <- c(
+          out,
+          list(.prob(
+            "foreach",
+            "items must be distinct",
+            "remove the repeated items"
+          ))
+        )
       }
       if (.is_whole(foreach_max) && length(foreach) > foreach_max) {
-        out <- c(out, list(.prob("foreach", sprintf(
-          "%d items is more than foreach_max (%d)", length(foreach), as.integer(foreach_max)),
-          "raise foreach_max or shorten the list")))
+        out <- c(
+          out,
+          list(.prob(
+            "foreach",
+            sprintf(
+              "%d items is more than foreach_max (%d)",
+              length(foreach),
+              as.integer(foreach_max)
+            ),
+            "raise foreach_max or shorten the list"
+          ))
+        )
       }
     }
   }
@@ -244,11 +446,24 @@
 }
 
 .node_v02_problems <- function(n) {
-  probs <- .node_rules(n@id, n@operator, n@emits, n@consumes, n@params,
-                       n@when, n@foreach, n@foreach_max, n@on_refusal)
-  vapply(probs, function(p) {
-    sprintf("node '%s', %s: %s. Fix: %s.", n@id, p$field, p$rule, p$fix)
-  }, character(1))
+  probs <- .node_rules(
+    n@id,
+    n@operator,
+    n@emits,
+    n@consumes,
+    n@params,
+    n@when,
+    n@foreach,
+    n@foreach_max,
+    n@on_refusal
+  )
+  vapply(
+    probs,
+    function(p) {
+      sprintf("node '%s', %s: %s. Fix: %s.", n@id, p$field, p$rule, p$fix)
+    },
+    character(1)
+  )
 }
 
 # Nodes upstream of `id`, following consumes edges.
@@ -268,13 +483,30 @@
   out <- list()
   for (id in ids) {
     w <- whens[[id]]
-    if (is.null(w) || !nzchar(w)) next
+    if (is.null(w) || !nzchar(w)) {
+      next
+    }
     up <- .ancestors(deps, id)
     for (r in .cond_check(w, "when")$refs) {
       if (!r %in% up) {
-        out[[length(out) + 1L]] <- c(node = id, .prob("when", sprintf(
-          "reads '%s', which is not upstream of '%s'", r, id),
-          sprintf("add an edge from '%s' to consumes, or read a node that is upstream", r)))
+        out[[length(out) + 1L]] <- c(
+          node = id,
+          .prob(
+            "when",
+            sprintf(
+              "reads '%s', which is not upstream of '%s'",
+              r,
+              id
+            ),
+            sprintf(
+              paste(
+                "add an edge from '%s' to consumes,",
+                "or read a node that is upstream"
+              ),
+              r
+            )
+          )
+        )
       }
     }
   }
@@ -285,9 +517,13 @@
   ids <- vapply(nodes, function(n) n@id, character(1))
   deps <- stats::setNames(lapply(nodes, .edge_sources), ids)
   whens <- stats::setNames(lapply(nodes, function(n) n@when), ids)
-  vapply(.graph_rules(ids, deps, whens), function(p) {
-    sprintf("node '%s', %s: %s. Fix: %s.", p$node, p$field, p$rule, p$fix)
-  }, character(1))
+  vapply(
+    .graph_rules(ids, deps, whens),
+    function(p) {
+      sprintf("node '%s', %s: %s. Fix: %s.", p$node, p$field, p$rule, p$fix)
+    },
+    character(1)
+  )
 }
 
 # ---------------------------------------------------------------
@@ -301,63 +537,105 @@
   env$ids <- character(0)
   add_row <- function(node, field, rule, fix) {
     key <- paste(node, field, sep = "\r")
-    if (key %in% env$seen) return(invisible())
+    if (key %in% env$seen) {
+      return(invisible())
+    }
     env$seen <- c(env$seen, key)
     env$rows[[length(env$rows) + 1L]] <- data.frame(
-      field = field, node = node, rule = rule, fix = fix,
-      stringsAsFactors = FALSE)
+      field = field,
+      node = node,
+      rule = rule,
+      fix = fix,
+      stringsAsFactors = FALSE
+    )
     invisible()
   }
   env$add <- function(path, rule, fix) {
     m <- regmatches(path, regexec("^nodes\\[([0-9]+)\\]\\.?(.*)$", path))[[1]]
     if (length(m)) {
       i <- as.integer(m[2])
-      add_row(env$ids[i] %||% sprintf("#%d", i),
-              if (nzchar(m[3])) m[3] else "(node)", rule, fix)
+      add_row(
+        env$ids[i] %||% sprintf("#%d", i),
+        if (nzchar(m[3])) m[3] else "(node)",
+        rule,
+        fix
+      )
     } else {
       add_row("", path, rule, fix)
     }
   }
   if (.is_map(spec) && is.list(spec$nodes)) {
-    env$ids <- vapply(seq_along(spec$nodes), function(i) {
-      x <- spec$nodes[[i]]
-      if (is.list(x) && .is_string(x$id)) x$id else sprintf("#%d", i)
-    }, character(1))
+    env$ids <- vapply(
+      seq_along(spec$nodes),
+      function(i) {
+        x <- spec$nodes[[i]]
+        if (is.list(x) && .is_string(x$id)) x$id else sprintf("#%d", i)
+      },
+      character(1)
+    )
   }
   spec <- .resolve_marks(spec, "", env)
   result <- function() {
-    probs <- if (length(env$rows)) do.call(rbind, env$rows) else
-      data.frame(field = character(0), node = character(0),
-                 rule = character(0), fix = character(0),
-                 stringsAsFactors = FALSE)
+    probs <- if (length(env$rows)) {
+      do.call(rbind, env$rows)
+    } else {
+      data.frame(
+        field = character(0),
+        node = character(0),
+        rule = character(0),
+        fix = character(0),
+        stringsAsFactors = FALSE
+      )
+    }
     list(spec = spec, problems = probs)
   }
 
   # Plan fields -------------------------------------------------------------
   if (!.is_map(spec) || length(spec) == 0L) {
-    add_row("", "(plan)", "a plan must be a mapping of fields",
-            "start from the example in plan_schema()")
+    add_row(
+      "",
+      "(plan)",
+      "a plan must be a mapping of fields",
+      "start from the example in plan_schema()"
+    )
     return(result())
   }
   for (k in setdiff(names(spec), .PLAN_FIELDS)) {
-    add_row("", k, "is not a plan field",
-            sprintf("plan fields are %s", paste(.PLAN_FIELDS, collapse = ", ")))
+    add_row(
+      "",
+      k,
+      "is not a plan field",
+      sprintf("plan fields are %s", paste(.PLAN_FIELDS, collapse = ", "))
+    )
   }
   if (!.is_string(spec$id) || !nzchar(spec$id)) {
     add_row("", "id", "the plan needs an id", "write id: \"my_plan\"")
   }
   pv <- spec$plan_version
   if (!is.null(pv) && !(.is_string(pv) && pv %in% c("0.1", "0.2"))) {
-    add_row("", "plan_version", sprintf("`%s` is not a plan version", format(pv)),
-            "write plan_version: \"0.2\" in quotes")
+    add_row(
+      "",
+      "plan_version",
+      sprintf("`%s` is not a plan version", format(pv)),
+      "write plan_version: \"0.2\" in quotes"
+    )
   }
   if (!is.null(spec$meta) && !.is_map(spec$meta)) {
-    add_row("", "meta", "meta must be a mapping", "write meta as key: value pairs")
+    add_row(
+      "",
+      "meta",
+      "meta must be a mapping",
+      "write meta as key: value pairs"
+    )
   }
   nodes <- spec$nodes
   if (!is.list(nodes) || length(nodes) == 0L || !is.null(names(nodes))) {
-    add_row("", "nodes", "a plan needs a list of one or more nodes",
-            "write nodes: followed by one entry per node")
+    add_row(
+      "",
+      "nodes",
+      "a plan needs a list of one or more nodes",
+      "write nodes: followed by one entry per node"
+    )
     return(result())
   }
 
@@ -372,58 +650,99 @@
     }
     ok_nodes[i] <- TRUE
     if (!.is_map(x) || length(x) == 0L) {
-      bad("(node)", "a node must be a mapping of fields", "write id:, tool: and emits: at least")
+      bad(
+        "(node)",
+        "a node must be a mapping of fields",
+        "write id:, tool: and emits: at least"
+      )
       next
     }
     for (k in setdiff(names(x), .NODE_FIELDS)) {
-      add_row(nid, k, "is not a node field",
-              sprintf("node fields are %s", paste(.NODE_FIELDS, collapse = ", ")))
+      add_row(
+        nid,
+        k,
+        "is not a node field",
+        sprintf("node fields are %s", paste(.NODE_FIELDS, collapse = ", "))
+      )
     }
     if (!.is_string(x$id) || !nzchar(x$id)) {
       bad("id", "the node needs an id", "write id: \"a_name\"")
     } else if (grepl("[.[:space:]]|\\[|\\]", x$id)) {
-      bad("id", "a node id may not contain dots, square brackets or white space",
-          "use letters, digits and underscores")
+      bad(
+        "id",
+        "a node id may not contain dots, square brackets or white space",
+        "use letters, digits and underscores"
+      )
     }
     for (f in c("role", "tool", "when")) {
       if (!is.null(x[[f]]) && !.is_string(x[[f]])) {
-        bad(f, "must be a single string", sprintf("write %s as text in quotes", f))
+        bad(
+          f,
+          "must be a single string",
+          sprintf("write %s as text in quotes", f)
+        )
       }
     }
     op <- x$operator %||% "compute"
     if (!(.is_string(op) && op %in% .OAP_OPERATORS)) {
-      bad("operator", sprintf("`%s` is not an operator", format(op)),
-          sprintf("use one of %s", paste(.OAP_OPERATORS, collapse = ", ")))
+      bad(
+        "operator",
+        sprintf("`%s` is not an operator", format(op)),
+        sprintf("use one of %s", paste(.OAP_OPERATORS, collapse = ", "))
+      )
       op <- ""
     }
     emits <- x$emits %||% "any"
     if (!(.is_string(emits) && emits %in% .OAP_CONTRACTS)) {
-      bad("emits", sprintf("`%s` is not an inferential target", format(emits)),
-          sprintf("use one of %s", paste(.OAP_CONTRACTS, collapse = ", ")))
+      bad(
+        "emits",
+        sprintf("`%s` is not an inferential target", format(emits)),
+        sprintf("use one of %s", paste(.OAP_CONTRACTS, collapse = ", "))
+      )
     }
     if (op == "compute" && !(.is_string(x$tool) && nzchar(x$tool))) {
-      bad("tool", "a compute node needs a tool",
-          "name a registered tool, a pkg::fn or a script:<path>::<fn>")
+      bad(
+        "tool",
+        "a compute node needs a tool",
+        "name a registered tool, a pkg::fn or a script:<path>::<fn>"
+      )
     }
     cons <- x$consumes %||% list()
     if (!is.list(cons) || !is.null(names(cons))) {
-      bad("consumes", "must be a list of edges", "write each edge as {from: <id>, contract: <target>}")
+      bad(
+        "consumes",
+        "must be a list of edges",
+        "write each edge as {from: <id>, contract: <target>}"
+      )
       cons <- list()
     }
     for (j in seq_along(cons)) {
       e <- cons[[j]]
       fj <- sprintf("consumes[%d]", j)
       if (!.is_map(e) || !.is_string(e$from)) {
-        bad(fj, "an edge needs `from`", "write the edge as {from: <id>, contract: <target>}")
+        bad(
+          fj,
+          "an edge needs `from`",
+          "write the edge as {from: <id>, contract: <target>}"
+        )
         next
       }
       for (k in setdiff(names(e), c("from", "contract"))) {
-        bad(paste0(fj, ".", k), "is not an edge field", "an edge has from and contract")
+        bad(
+          paste0(fj, ".", k),
+          "is not an edge field",
+          "an edge has from and contract"
+        )
       }
-      if (!is.null(e$contract) &&
-          !(.is_string(e$contract) && e$contract %in% .OAP_CONTRACTS)) {
-        bad(paste0(fj, ".contract"), sprintf("`%s` is not an inferential target", format(e$contract)),
-            sprintf("use one of %s", paste(.OAP_CONTRACTS, collapse = ", ")))
+      if (
+        !is.null(e$contract) &&
+          !(.is_string(e$contract) && e$contract %in% .OAP_CONTRACTS)
+      ) {
+        bad(
+          paste0(fj, ".contract"),
+          sprintf("`%s` is not an inferential target", format(e$contract)),
+          sprintf("use one of %s", paste(.OAP_CONTRACTS, collapse = ", "))
+        )
       }
     }
     params <- x$params %||% list()
@@ -433,89 +752,186 @@
     }
     if (op == "abstain_gate") {
       if (length(cons) != 1L) {
-        bad("consumes", "a gate consumes exactly one node", "list the one verdict the gate reads")
+        bad(
+          "consumes",
+          "a gate consumes exactly one node",
+          "list the one verdict the gate reads"
+        )
       }
-      if (!is.null(params$mode) && !(.is_string(params$mode) && params$mode %in% .GATE_MODES)) {
-        bad("params.mode", sprintf("`%s` is not a gate mode", format(params$mode)),
-            "use flag, halt-branch or reroute, in quotes")
+      if (
+        !is.null(params$mode) &&
+          !(.is_string(params$mode) && params$mode %in% .GATE_MODES)
+      ) {
+        bad(
+          "params.mode",
+          sprintf("`%s` is not a gate mode", format(params$mode)),
+          "use flag, halt-branch or reroute, in quotes"
+        )
       }
-      if (!is.null(params$n_min) && !(.is_whole(params$n_min) && params$n_min >= 0)) {
-        bad("params.n_min", "must be a whole number", "write a plain whole number; the default is 25")
+      if (
+        !is.null(params$n_min) &&
+          !(.is_whole(params$n_min) && params$n_min >= 0)
+      ) {
+        bad(
+          "params.n_min",
+          "must be a whole number",
+          "write a plain whole number; the default is 25"
+        )
       }
-      if (!is.null(params$z_floor) && !(is.numeric(params$z_floor) && length(params$z_floor) == 1L)) {
-        bad("params.z_floor", "must be a number", "write a plain number; the default is 2.0")
+      if (
+        !is.null(params$z_floor) &&
+          !(is.numeric(params$z_floor) && length(params$z_floor) == 1L)
+      ) {
+        bad(
+          "params.z_floor",
+          "must be a number",
+          "write a plain number; the default is 2.0"
+        )
       }
       fl <- params$floors
-      if (!is.null(fl) && !(.is_map(fl) && all(vapply(fl, function(v) is.numeric(v) && length(v) == 1L, logical(1))))) {
-        bad("params.floors", "must map metric names to numbers", "write floors: {metric: 10.0}")
+      if (
+        !is.null(fl) &&
+          !(.is_map(fl) &&
+            all(vapply(
+              fl,
+              function(v) is.numeric(v) && length(v) == 1L,
+              logical(1)
+            )))
+      ) {
+        bad(
+          "params.floors",
+          "must map metric names to numbers",
+          "write floors: {metric: 10.0}"
+        )
       }
     }
     fe <- x$foreach
     if (!is.null(fe) && !is.atomic(fe) && !is.list(fe)) {
-      bad("foreach", "must be a list of items or {from, column}", "see the foreach section of ?conduct")
+      bad(
+        "foreach",
+        "must be a list of items or {from, column}",
+        "see the foreach section of ?conduct"
+      )
       fe <- NULL
     }
     fmax <- x$foreach_max %||% 50L
     if (!(.is_whole(fmax) && fmax >= 1)) {
-      bad("foreach_max", "must be a whole number of at least 1", "write a plain whole number; the default is 50")
+      bad(
+        "foreach_max",
+        "must be a whole number of at least 1",
+        "write a plain whole number; the default is 50"
+      )
       fmax <- 50L
     }
     onr <- x$on_refusal %||% "continue"
     if (!.is_string(onr)) {
-      bad("on_refusal", "must be a single string", "use continue, halt-branch or stop")
+      bad(
+        "on_refusal",
+        "must be a single string",
+        "use continue, halt-branch or stop"
+      )
       onr <- "continue"
     }
-    if (!ok_nodes[i]) next
-    if (!is.null(fe) && is.atomic(fe)) fe <- as.list(fe)
-    edges <- lapply(cons, function(e) list(from = e$from, contract = e$contract %||% "any"))
-    for (p in .node_rules(x$id, op, emits, edges, params, x$when %||% "", fe,
-                          fmax, onr)) {
+    if (!ok_nodes[i]) {
+      next
+    }
+    if (!is.null(fe) && is.atomic(fe)) {
+      fe <- as.list(fe)
+    }
+    edges <- lapply(cons, function(e) {
+      list(from = e$from, contract = e$contract %||% "any")
+    })
+    for (p in .node_rules(
+      x$id,
+      op,
+      emits,
+      edges,
+      params,
+      x$when %||% "",
+      fe,
+      fmax,
+      onr
+    )) {
       bad(p$field, p$rule, p$fix)
     }
   }
 
   # Graph -------------------------------------------------------------------
-  if (!all(ok_nodes)) return(result())
+  if (!all(ok_nodes)) {
+    return(result())
+  }
   ids <- vapply(nodes, function(x) x$id, character(1))
   for (d in unique(ids[duplicated(ids)])) {
     add_row(d, "id", "node ids must be unique", "rename one of the nodes")
   }
-  deps <- stats::setNames(lapply(nodes, function(x) {
-    vapply(x$consumes %||% list(), function(e) e$from, character(1))
-  }), ids)
+  deps <- stats::setNames(
+    lapply(nodes, function(x) {
+      vapply(x$consumes %||% list(), function(e) e$from, character(1))
+    }),
+    ids
+  )
   for (id in unique(ids)) {
     for (f in setdiff(deps[[id]], ids)) {
-      add_row(id, "consumes", sprintf("'%s' is not a node of this plan", f),
-              "consume a node that the plan defines")
+      add_row(
+        id,
+        "consumes",
+        sprintf("'%s' is not a node of this plan", f),
+        "consume a node that the plan defines"
+      )
     }
   }
-  if (anyDuplicated(ids) || !all(unlist(deps) %in% ids)) return(result())
+  if (anyDuplicated(ids) || !all(unlist(deps) %in% ids)) {
+    return(result())
+  }
   remaining <- ids
   repeat {
-    ready <- remaining[vapply(remaining, function(i) {
-      all(deps[[i]] %in% setdiff(ids, remaining))
-    }, logical(1))]
-    if (length(ready) == 0L) break
+    ready <- remaining[vapply(
+      remaining,
+      function(i) {
+        all(deps[[i]] %in% setdiff(ids, remaining))
+      },
+      logical(1)
+    )]
+    if (length(ready) == 0L) {
+      break
+    }
     remaining <- setdiff(remaining, ready)
   }
   if (length(remaining)) {
-    add_row("", "nodes", sprintf("the plan has a cycle through %s",
-                                 paste(remaining, collapse = ", ")),
-            "remove an edge so that no node depends on itself")
+    add_row(
+      "",
+      "nodes",
+      sprintf(
+        "the plan has a cycle through %s",
+        paste(remaining, collapse = ", ")
+      ),
+      "remove an edge so that no node depends on itself"
+    )
     return(result())
   }
   whens <- stats::setNames(lapply(nodes, function(x) x$when %||% ""), ids)
-  for (p in .graph_rules(ids, deps, whens)) add_row(p$node, p$field, p$rule, p$fix)
+  for (p in .graph_rules(ids, deps, whens)) {
+    add_row(p$node, p$field, p$rule, p$fix)
+  }
   result()
 }
 
 .format_problems <- function(probs) {
-  lines <- sprintf("* %s%s: %s. Fix: %s.",
-                   ifelse(nzchar(probs$node), sprintf("node '%s', ", probs$node), ""),
-                   probs$field, probs$rule, probs$fix)
-  paste0(sprintf("The plan has %d problem%s:\n", nrow(probs),
-                 if (nrow(probs) == 1L) "" else "s"),
-         paste(lines, collapse = "\n"))
+  lines <- sprintf(
+    "* %s%s: %s. Fix: %s.",
+    ifelse(nzchar(probs$node), sprintf("node '%s', ", probs$node), ""),
+    probs$field,
+    probs$rule,
+    probs$fix
+  )
+  paste0(
+    sprintf(
+      "The plan has %d problem%s:\n",
+      nrow(probs),
+      if (nrow(probs) == 1L) "" else "s"
+    ),
+    paste(lines, collapse = "\n")
+  )
 }
 
 # An empty mapping reads as a named empty list from JSON; plans store list().
@@ -523,10 +939,15 @@
 
 .spec_to_plan <- function(spec) {
   v <- .validate_spec(spec)
-  if (nrow(v$problems)) stop(.format_problems(v$problems), call. = FALSE)
+  if (nrow(v$problems)) {
+    stop(.format_problems(v$problems), call. = FALSE)
+  }
   spec <- v$spec
-  oap_plan(id = spec$id, meta = .as_plain_list(spec$meta %||% list()),
-           nodes = lapply(spec$nodes, .node_from_list))
+  oap_plan(
+    id = spec$id,
+    meta = .as_plain_list(spec$meta %||% list()),
+    nodes = lapply(spec$nodes, .node_from_list)
+  )
 }
 
 # ---------------------------------------------------------------
@@ -577,11 +998,16 @@ plan_validate <- function(x) {
   stopifnot(is.character(x), length(x) == 1L)
   spec <- tryCatch(
     if (.looks_json(x)) .read_json_spec(x) else .read_yaml_spec(x),
-    error = function(e) e)
+    error = function(e) e
+  )
   if (inherits(spec, "error")) {
-    return(data.frame(field = "(file)", node = "", rule = conditionMessage(spec),
-                      fix = "correct the syntax at the place the message names",
-                      stringsAsFactors = FALSE))
+    return(data.frame(
+      field = "(file)",
+      node = "",
+      rule = conditionMessage(spec),
+      fix = "correct the syntax at the place the message names",
+      stringsAsFactors = FALSE
+    ))
   }
   .validate_spec(spec)$problems
 }
@@ -638,6 +1064,10 @@ plan_from_json <- function(path) {
 #'
 #' @export
 plan_schema <- function() {
-  system.file("schema", "oap_plan_v0.2.schema.json", package = "conductoR",
-              mustWork = TRUE)
+  system.file(
+    "schema",
+    "oap_plan_v0.2.schema.json",
+    package = "conductoR",
+    mustWork = TRUE
+  )
 }

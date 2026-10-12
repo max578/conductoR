@@ -179,7 +179,8 @@ foreach_to_manifest <- function(node, items, target) {
     run_id = paste0("foreach-", .summary_digest(list(node@id, tab))),
     method = "foreach:items", seed = NA_integer_, params = tab,
     outputs = outs, summary = summ,
-    consumed_manifests = lapply(unname(outs), orchestraManifest::manifest_lineage),
+    consumed_manifests = lapply(unname(outs),
+                                orchestraManifest::manifest_lineage),
     metadata = list(derived = !is.null(outs), source = "conductoR:foreach"),
     timestamp = Sys.time(), data_hash = dh)
 }

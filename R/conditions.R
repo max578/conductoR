@@ -2,19 +2,31 @@
 # R's parser, then interpreted against a whitelist; never passed to eval().
 
 .COND_COMPARE <- c("==", "!=", "<", "<=", ">", ">=")
-.COND_LOGIC   <- c("&", "|", "&&", "||")
-.COND_FIELDS  <- c("headline", "abstained", "n_rows")
-.COND_ALLOWED <- "comparisons (== != < <= > >=), %in% with c(...), & | ! and brackets"
+.COND_LOGIC <- c("&", "|", "&&", "||")
+.COND_FIELDS <- c("headline", "abstained", "n_rows")
+.COND_ALLOWED <- paste(
+  "comparisons (== != < <= > >=), %in% with c(...),",
+  "& | ! and brackets"
+)
 
 # A reference in a `when` condition: <node>.headline, <node>.abstained,
 # <node>.n_rows or <node>.metrics.<name>.
 .cond_ref <- function(name) {
-  m <- regmatches(name, regexec(
-    "^([A-Za-z][A-Za-z0-9_]*)\\.(headline|abstained|n_rows|metrics\\.(.+))$",
-    name))[[1]]
-  if (length(m) == 0L) return(NULL)
-  list(node = m[2], field = if (nzchar(m[4])) "metrics" else m[3],
-       metric = if (nzchar(m[4])) m[4] else NA_character_)
+  m <- regmatches(
+    name,
+    regexec(
+      "^([A-Za-z][A-Za-z0-9_]*)\\.(headline|abstained|n_rows|metrics\\.(.+))$",
+      name
+    )
+  )[[1]]
+  if (length(m) == 0L) {
+    return(NULL)
+  }
+  list(
+    node = m[2],
+    field = if (nzchar(m[4])) "metrics" else m[3],
+    metric = if (nzchar(m[4])) m[4] else NA_character_
+  )
 }
 
 #' Check a condition against the grammar
@@ -31,8 +43,12 @@
 .cond_check <- function(text, kind = c("when", "rule")) {
   kind <- match.arg(kind)
   out <- list(problems = character(0), expr = NULL, refs = character(0))
-  if (!is.character(text) || length(text) != 1L || is.na(text) ||
-      !nzchar(trimws(text))) {
+  if (
+    !is.character(text) ||
+      length(text) != 1L ||
+      is.na(text) ||
+      !nzchar(trimws(text))
+  ) {
     out$problems <- "a condition must be a single non-empty string"
     return(out)
   }
@@ -42,7 +58,8 @@
   }
   pd <- tryCatch(
     utils::getParseData(parse(text = text, keep.source = TRUE)),
-    error = function(e) NULL)
+    error = function(e) NULL
+  )
   expr <- tryCatch(str2lang(text), error = function(e) NULL)
   if (is.null(expr) || is.null(pd)) {
     out$problems <- sprintf("`%s` is not a single valid expression", text)
@@ -60,7 +77,9 @@
   .cond_walk(expr, kind, env)
   out$problems <- unique(env$problems)
   out$refs <- unique(env$refs)
-  if (length(out$problems) == 0L) out$expr <- expr
+  if (length(out$problems) == 0L) {
+    out$expr <- expr
+  }
   out
 }
 
@@ -72,7 +91,9 @@
 
 .cond_walk <- function(x, kind, env) {
   bad <- function(msg) env$problems <- c(env$problems, msg)
-  if (.cond_literal(x)) return(invisible())
+  if (.cond_literal(x)) {
+    return(invisible())
+  }
   if (is.symbol(x)) {
     name <- as.character(x)
     if (name %in% c("T", "F")) {
@@ -80,9 +101,14 @@
     } else if (kind == "when") {
       ref <- .cond_ref(name)
       if (is.null(ref)) {
-        bad(sprintf(paste0("`%s` is not a reference; use <node>.headline, ",
-                           "<node>.abstained, <node>.n_rows or ",
-                           "<node>.metrics.<name>"), name))
+        bad(sprintf(
+          paste0(
+            "`%s` is not a reference; use <node>.headline, ",
+            "<node>.abstained, <node>.n_rows or ",
+            "<node>.metrics.<name>"
+          ),
+          name
+        ))
       } else {
         env$refs <- c(env$refs, ref$node)
       }
@@ -95,18 +121,26 @@
   }
   head <- x[[1]]
   if (!is.symbol(head)) {
-    inner <- if (is.call(head) && is.symbol(head[[1]])) as.character(head[[1]]) else ""
-    bad(if (inner %in% c("::", ":::", "$", "@")) {
-      sprintf("`%s` is not allowed in a condition", inner)
+    inner <- if (is.call(head) && is.symbol(head[[1]])) {
+      as.character(head[[1]])
     } else {
-      "function calls are not allowed in a condition"
-    })
+      ""
+    }
+    bad(
+      if (inner %in% c("::", ":::", "$", "@")) {
+        sprintf("`%s` is not allowed in a condition", inner)
+      } else {
+        "function calls are not allowed in a condition"
+      }
+    )
     return(invisible())
   }
   f <- as.character(head)
   args <- as.list(x)[-1]
   if (f %in% c(.COND_COMPARE, .COND_LOGIC) && length(args) == 2L) {
-    for (a in args) .cond_walk(a, kind, env)
+    for (a in args) {
+      .cond_walk(a, kind, env)
+    }
   } else if (f %in% c("!", "(") && length(args) == 1L) {
     .cond_walk(args[[1]], kind, env)
   } else if (f == "-" && length(args) == 1L && is.numeric(args[[1]])) {
@@ -132,26 +166,34 @@
 # Applies the whitelisted operators to a checked expression. `lookup`
 # returns the value of a reference (a `when`) or a column (a `select` rule).
 .cond_value <- function(x, lookup) {
-  if (is.symbol(x)) return(lookup(as.character(x)))
-  if (!is.call(x)) return(x)
+  if (is.symbol(x)) {
+    return(lookup(as.character(x)))
+  }
+  if (!is.call(x)) {
+    return(x)
+  }
   f <- as.character(x[[1]])
   a <- as.list(x)[-1]
   v <- function(i) .cond_value(a[[i]], lookup)
-  switch(f,
-    "("  = v(1L),
-    "!"  = !v(1L),
-    "-"  = -a[[1]],
-    "c"  = unlist(lapply(seq_along(a), v)),
+  switch(
+    f,
+    "(" = v(1L),
+    "!" = !v(1L),
+    "-" = -a[[1]],
+    "c" = unlist(lapply(seq_along(a), v)),
     "%in%" = v(1L) %in% v(2L),
-    "&"  = , "&&" = v(1L) & v(2L),
-    "|"  = , "||" = v(1L) | v(2L),
+    "&" = ,
+    "&&" = v(1L) & v(2L),
+    "|" = ,
+    "||" = v(1L) | v(2L),
     "==" = v(1L) == v(2L),
     "!=" = v(1L) != v(2L),
-    "<"  = v(1L) < v(2L),
+    "<" = v(1L) < v(2L),
     "<=" = v(1L) <= v(2L),
-    ">"  = v(1L) > v(2L),
+    ">" = v(1L) > v(2L),
     ">=" = v(1L) >= v(2L),
-    stop(sprintf("`%s` is not allowed in a condition", f), call. = FALSE))
+    stop(sprintf("`%s` is not allowed in a condition", f), call. = FALSE)
+  )
 }
 
 # The value of a node's `when` condition, read from the manifests already
@@ -162,28 +204,53 @@
     ref <- .cond_ref(name)
     m <- bus[[ref$node]]
     if (is.null(m)) {
-      stop(sprintf("node '%s': its when condition reads '%s', which has not run",
-                   node@id, ref$node), call. = FALSE)
+      stop(
+        sprintf(
+          "node '%s': its when condition reads '%s', which has not run",
+          node@id,
+          ref$node
+        ),
+        call. = FALSE
+      )
     }
     s <- m@summary
-    val <- switch(ref$field,
-      headline  = s$headline %||% NA_character_,
+    val <- switch(
+      ref$field,
+      headline = s$headline %||% NA_character_,
       abstained = isTRUE(s$abstained),
-      n_rows    = nrow(m@params),
-      metrics   = s$metrics[[ref$metric]])
+      n_rows = nrow(m@params),
+      metrics = s$metrics[[ref$metric]]
+    )
     if (is.null(val) || !is.atomic(val) || length(val) != 1L) {
-      stop(sprintf(paste0("node '%s': its when condition reads `%s`, but ",
-                          "'%s' has no single value there"),
-                   node@id, name, ref$node), call. = FALSE)
+      stop(
+        sprintf(
+          paste0(
+            "node '%s': its when condition reads `%s`, but ",
+            "'%s' has no single value there"
+          ),
+          node@id,
+          name,
+          ref$node
+        ),
+        call. = FALSE
+      )
     }
     val
   }
   val <- .cond_value(chk$expr, lookup)
   if (!is.logical(val) || length(val) != 1L || is.na(val)) {
-    stop(sprintf(paste0("node '%s': its when condition `%s` must give TRUE ",
-                        "or FALSE, and gave %s"),
-                 node@id, node@when, paste(format(val), collapse = ", ")),
-         call. = FALSE)
+    stop(
+      sprintf(
+        paste0(
+          "node '%s': its when condition `%s` must give TRUE ",
+          "or FALSE, and gave %s"
+        ),
+        node@id,
+        node@when,
+        paste(format(val), collapse = ", ")
+      ),
+      call. = FALSE
+    )
   }
   val
 }

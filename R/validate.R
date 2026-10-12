@@ -1,5 +1,5 @@
-# validate.R -- Check a plan against the plan language, reporting every problem at
-# once. Mirrors inst/schema/; node references, cycles and conditions are checked only here.
+# validate.R -- Check a plan against the plan language and report every problem
+# at once. Mirrors inst/schema/; references, cycles and conditions only here.
 
 .PLAN_FIELDS <- c("id", "plan_version", "meta", "nodes")
 .NODE_FIELDS <- c("id", "role", "tool", "operator", "emits", "consumes",

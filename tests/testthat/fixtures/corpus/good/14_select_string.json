@@ -1,0 +1,24 @@
+{
+  "id": "select_string",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "flag",
+      "tool": "t_flag",
+      "emits": "parameters"
+    },
+    {
+      "id": "sig",
+      "operator": "select",
+      "consumes": [
+        {
+          "from": "flag",
+          "contract": "parameters"
+        }
+      ],
+      "params": {
+        "rule": "kind != \"main\" & p_value <= 0.01"
+      }
+    }
+  ]
+}

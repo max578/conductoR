@@ -19,6 +19,13 @@ text as a single string.
 Every compute node must reference its tool by name (see \code{\link[=node]{node()}}), since
 a closure cannot be written to a file. Operator nodes carry no tool.
 }
+\details{
+Every string is written in double quotes and every number in plain
+decimal form, so the file reads back to the same plan. The line
+\code{plan_version: "0.2"} is written only when the plan uses a field added in
+version 0.2: \code{when}, \code{foreach}, \code{foreach_max}, \code{on_refusal} or a \code{select}
+node.
+}
 \examples{
 p <- oap_plan(id = "one_lens", nodes = list(
   node("lens", tool = "my_lens", emits = "treatment_effects"),

@@ -22,9 +22,11 @@ to write nothing. See \code{\link[=run_provenance]{run_provenance()}} for the fi
 \value{
 A list with elements \code{plan_id}, \code{plan_hash}, \code{input_hash},
 \code{label}, \code{bus} (the manifest each node emitted, named by node id),
-\code{provenance} (one record per node), \code{n_nodes}, \code{n_skipped}, \code{seconds}
-and \code{terminal} (the manifest of the last node that ran). Returned
-invisibly.
+\code{provenance} (one record per node), \code{conditions} (one row per \code{when}
+evaluated: node, condition, value), \code{items} (one row per \code{foreach} item:
+node, item, instance, status, run_id), \code{stopped_by} (the node whose
+refusal ended the run, or \code{NA}), \code{n_nodes}, \code{n_skipped}, \code{seconds} and
+\code{terminal} (the manifest of the last node that ran). Returned invisibly.
 }
 \description{
 Walks the plan in topological order and performs each node with
@@ -59,6 +61,50 @@ one gate. It emits one of seven consensus headlines:
 mode, or no lens survived a reroute).
 }
 
+\section{Conditions}{
+
+A node with a \code{when} condition runs only when the condition is \code{TRUE}.
+When it is \code{FALSE}, the node and every node downstream of it are skipped,
+and the run records the condition, its value and the reason. A condition
+reads results of nodes upstream: \verb{<node>.headline}, \verb{<node>.abstained},
+\verb{<node>.n_rows} (rows of its \code{params} table) and \verb{<node>.metrics.<name>}.
+It may use numbers written plainly, quoted strings, \code{TRUE}, \code{FALSE}, the
+comparisons \code{==}, \code{!=}, \code{<}, \code{<=}, \code{>}, \code{>=}, \code{\%in\%} with \code{c(...)}, the
+logical operators \code{&}, \code{|}, \code{!} (\code{&&} and \code{||} read the same) and
+brackets. Anything else, such as a function call, \code{$}, \code{::}, backticks or
+an assignment, is refused when the plan is built. A condition is never
+run as R code.
+
+A \code{select} node keeps the rows of its input's \code{params} table for which
+\code{params$rule} is \code{TRUE}. The rule follows the same grammar, with column
+names in place of references. Rows where the rule gives \code{NA} are dropped
+and counted in the metric \code{n_na}.
+}
+
+\section{Running a node once per item}{
+
+A compute node with \code{foreach} runs once for each item: a fixed list, or
+each distinct value of a column of the \code{params} table of a node it
+consumes (\verb{list(from = <node>, column = <name>)}). Each instance receives
+its item as \code{node@params$item} and is recorded as \verb{<id>[<item>]}. More
+items than \code{foreach_max} (default 50) stop the run with an error. The node
+emits one manifest whose \code{params} table has one row per item, with its
+status (\code{ran}, \code{refused} or \code{skipped}), and whose \code{outputs} holds the
+instance manifests. With no items, nothing runs and downstream nodes
+receive that record, with \code{n_items = 0}.
+}
+
+\section{Refusals}{
+
+A refusal is a result that abstains: its summary says \code{abstained}. A
+node's \code{on_refusal} sets what a refusal does: \code{"continue"} (default)
+passes it on, \code{"halt-branch"} skips every node downstream of it, \code{"stop"}
+ends the run; the nodes not yet performed are recorded as skipped. In a
+\code{foreach}, \code{"halt-branch"} and \code{"stop"} also skip the items not yet run.
+A tool that fails with an error stops the run in every case: an error is
+not a refusal.
+}
+
 \section{Blinded runs}{
 
 Every run records \code{input_hash}, a SHA-256 of \code{data}, and \code{plan_hash}, a
@@ -85,6 +131,21 @@ p <- oap_plan(id = "two_lenses", nodes = list(
 ))
 run <- conduct(p, verbose = FALSE)
 run$terminal@summary$headline
+
+# Run a check once per site, but only when lens a found an effect.
+check <- function(inputs, data, node) {
+  lens_to_manifest("effect", TRUE, "check",
+                   paste0("check:", node@params$item))
+}
+p2 <- oap_plan(id = "per_site", nodes = list(
+  node("a", lens_a, emits = "treatment_effects"),
+  node("check", check, emits = "treatment_effects",
+       consumes = list(edge("a", "treatment_effects")),
+       when = "a.headline == \"effect\"",
+       foreach = c("site_1", "site_2"))
+))
+run2 <- conduct(p2, verbose = FALSE)
+run2$items
 
 }
 \seealso{

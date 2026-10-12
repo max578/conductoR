@@ -1,0 +1,88 @@
+{
+  "id": "c2_style",
+  "plan_version": "0.2",
+  "meta": {
+    "question": "Is the sowing-window effect real, and which interactions hold up?"
+  },
+  "nodes": [
+    {
+      "id": "effect",
+      "tool": "t_effect",
+      "emits": "treatment_effects",
+      "role": "mixed_model"
+    },
+    {
+      "id": "terms",
+      "tool": "t_terms",
+      "emits": "parameters",
+      "consumes": [
+        {
+          "from": "effect",
+          "contract": "treatment_effects"
+        }
+      ]
+    },
+    {
+      "id": "flagged",
+      "operator": "select",
+      "emits": "parameters",
+      "consumes": [
+        {
+          "from": "terms",
+          "contract": "parameters"
+        }
+      ],
+      "params": {
+        "rule": "order > 1 & p_value < 0.05"
+      }
+    },
+    {
+      "id": "validate",
+      "tool": "t_validate",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "flagged",
+          "contract": "parameters"
+        }
+      ],
+      "when": "flagged.n_rows > 0",
+      "foreach": {
+        "from": "flagged",
+        "column": "term"
+      },
+      "foreach_max": 50,
+      "on_refusal": "continue"
+    },
+    {
+      "id": "gate",
+      "operator": "abstain_gate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "effect",
+          "contract": "treatment_effects"
+        }
+      ],
+      "params": {
+        "mode": "flag",
+        "n_min": 30
+      }
+    },
+    {
+      "id": "value",
+      "tool": "t_value",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "gate",
+          "contract": "decisions"
+        },
+        {
+          "from": "validate",
+          "contract": "treatment_effects"
+        }
+      ]
+    }
+  ]
+}

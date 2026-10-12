@@ -1,0 +1,23 @@
+{
+  "id": "when_metrics",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ],
+      "when": "!a.abstained & a.metrics.p_value < 0.05"
+    }
+  ]
+}

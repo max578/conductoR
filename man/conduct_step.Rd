@@ -31,6 +31,9 @@ fails \code{\link[orchestraManifest:consume_manifest]{orchestraManifest::consume
 message. A tool that returns something other than a manifest, or a
 manifest with a different target from \code{node@emits}, stops after the tool
 has run.
+
+\code{when}, \code{foreach} and \code{on_refusal} are applied by \code{\link[=conduct]{conduct()}};
+\code{conduct_step()} performs the node once, as given.
 }
 
 \examples{

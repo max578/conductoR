@@ -1,0 +1,34 @@
+{
+  "id": "gate_halt",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "g",
+      "operator": "abstain_gate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ],
+      "on_refusal": "halt-branch"
+    },
+    {
+      "id": "d",
+      "tool": "t_d",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "g",
+          "contract": "decisions"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "a",
+      "emits": "treatment_effects"
+    }
+  ]
+}

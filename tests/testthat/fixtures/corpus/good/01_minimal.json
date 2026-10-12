@@ -1,0 +1,10 @@
+{
+  "id": "minimal",
+  "nodes": [
+    {
+      "id": "lens",
+      "tool": "t_lens",
+      "emits": "treatment_effects"
+    }
+  ]
+}

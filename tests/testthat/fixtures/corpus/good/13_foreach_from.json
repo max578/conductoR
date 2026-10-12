@@ -1,0 +1,41 @@
+{
+  "id": "fe_from",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "flag",
+      "tool": "t_flag",
+      "emits": "parameters"
+    },
+    {
+      "id": "sig",
+      "operator": "select",
+      "emits": "parameters",
+      "consumes": [
+        {
+          "from": "flag",
+          "contract": "parameters"
+        }
+      ],
+      "params": {
+        "rule": "p_value < 0.05"
+      }
+    },
+    {
+      "id": "check",
+      "tool": "t_check",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "sig",
+          "contract": "parameters"
+        }
+      ],
+      "foreach": {
+        "from": "sig",
+        "column": "term"
+      },
+      "foreach_max": 20
+    }
+  ]
+}

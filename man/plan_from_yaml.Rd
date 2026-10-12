@@ -16,6 +16,12 @@ An \link{oap_plan}.
 Tool references are kept as strings and resolved when the plan is
 performed, so a plan loads without its tools present.
 }
+\details{
+The plan is checked by \code{\link[=plan_validate]{plan_validate()}} before it is built, and a plan
+with problems is an error that lists all of them. Unquoted \code{yes}, \code{no},
+\code{on} and \code{off} are refused rather than read as logicals, and numbers in
+scientific notation are refused with their plain form.
+}
 \examples{
 f <- system.file("scores", "dual_lens_gate.oap.yaml", package = "conductoR")
 p <- plan_from_yaml(f)
@@ -23,7 +29,7 @@ plan_order(p)
 
 }
 \seealso{
-\code{\link[=plan_to_yaml]{plan_to_yaml()}}.
+\code{\link[=plan_to_yaml]{plan_to_yaml()}}, \code{\link[=plan_validate]{plan_validate()}}, \code{\link[=plan_from_json]{plan_from_json()}}.
 }
 \author{
 Max Moldovan

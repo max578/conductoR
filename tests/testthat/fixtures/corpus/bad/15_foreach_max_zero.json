@@ -1,0 +1,14 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "foreach": [
+        "u"
+      ],
+      "foreach_max": 0
+    }
+  ]
+}

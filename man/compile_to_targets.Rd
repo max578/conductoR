@@ -24,6 +24,11 @@ calling \code{\link[=conduct_step]{conduct_step()}}, so the plan inherits cachin
 up-to-date nodes from 'targets' while every edge stays type-checked. Target
 names are the node ids prefixed with \code{n_}.
 }
+\details{
+A plan whose nodes use \code{when}, \code{foreach} or \code{on_refusal} is refused with
+an error of class \code{conductoR_unsupported}, since those are applied by
+\code{\link[=conduct]{conduct()}}. A \code{select} node compiles like any other node.
+}
 \examples{
 p <- oap_plan(id = "chain", nodes = list(
   node("a", tool = "stats::median"),

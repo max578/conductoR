@@ -1,6 +1,6 @@
 Package: conductoR
 Title: Perform a Contract-Typed Analytical Plan Across Analytics Components
-Version: 0.1.0
+Version: 0.2.0
 Authors@R:
     person(given = "Max",
            family = "Moldovan",
@@ -29,6 +29,7 @@ Config/testthat/edition: 3
 Depends:
     R (>= 4.3.0)
 Imports:
+    jsonlite,
     orchestraManifest (>= 0.1.0),
     S7,
     stats,
@@ -36,6 +37,7 @@ Imports:
     yaml
 Suggests:
     agridat,
+    jsonvalidate,
     knitr,
     PESTO,
     rmarkdown,

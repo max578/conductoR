@@ -1,0 +1,23 @@
+{
+  "id": "stop",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "on_refusal": "stop"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ]
+    }
+  ]
+}

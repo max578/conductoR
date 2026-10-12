@@ -23,6 +23,14 @@
 #' [resolve_tool()] resolves when the node runs. The reference form is what
 #' makes a plan portable, see [plan_to_yaml()].
 #'
+#' A `"select"` node keeps the rows of its one input's `params` table that
+#' meet `params$rule`, and emits them under the input's inferential target.
+#'
+#' `when`, `foreach`, `foreach_max` and `on_refusal` are applied by
+#' [conduct()]; see its sections for what each does. Node ids may not contain
+#' dots, square brackets or white space, because conditions refer to nodes as
+#' `<node>.<field>` and `foreach` instances are named `<node>[<item>]`.
+#'
 #' @param id A single non-empty string, unique within the plan.
 #' @param role A free-text label for the component the node stands for.
 #' @param tool The closure that performs the node, or an unused stand-in when
@@ -32,8 +40,20 @@
 #' @param consumes A list of edges, each as returned by [edge()].
 #' @param emits The inferential target the node's output must declare, one of
 #'   [orchestraManifest::inferential_targets()] or `"any"`.
-#' @param operator One of `"compute"`, `"abstain_gate"` or `"triangulate"`.
-#' @param params A named list of operator parameters.
+#' @param operator One of `"compute"`, `"abstain_gate"`, `"triangulate"` or
+#'   `"select"`.
+#' @param params A named list of operator parameters. A `"select"` node needs
+#'   `rule`, a row condition written in the grammar described in [conduct()].
+#' @param when A condition that must be `TRUE` for the node to run, or `""`
+#'   to always run it. See the *Conditions* section of [conduct()].
+#' @param foreach `NULL` to run the node once; a list of items to run it once
+#'   per item; or `list(from = <node id>, column = <name>)` to take the items
+#'   from a column of the `params` table of a node this node consumes.
+#' @param foreach_max The largest number of items a `foreach` may run. More
+#'   items stop the run with an error.
+#' @param on_refusal What an abstaining result of this node does: `"continue"`
+#'   passes it on, `"halt-branch"` skips every node downstream, `"stop"` ends
+#'   the run.
 #'
 #' @returns An `oap_node` object.
 #'
@@ -58,13 +78,23 @@ oap_node <- S7::new_class(
     consumes = S7::new_property(S7::class_list, default = quote(list())),
     emits    = S7::new_property(S7::class_character, default = "any"),
     operator = S7::new_property(S7::class_character, default = "compute"),
-    params   = S7::new_property(S7::class_list, default = quote(list()))
+    params   = S7::new_property(S7::class_list, default = quote(list())),
+    when     = S7::new_property(S7::class_character, default = ""),
+    foreach  = S7::new_property(S7::new_union(NULL, S7::class_list),
+                                default = NULL),
+    foreach_max = S7::new_property(S7::class_integer, default = 50L),
+    on_refusal  = S7::new_property(S7::class_character, default = "continue")
   ),
   validator = function(self) {
     errs <- character(0)
     if (length(self@id) != 1L || !nzchar(self@id)) {
       errs <- c(errs, "node `id` must be a single non-empty string")
+    } else if (grepl("[.[:space:]]|\\[|\\]", self@id)) {
+      errs <- c(errs, sprintf(paste0("node id '%s' may not contain dots, ",
+                                     "square brackets or white space"),
+                              self@id))
     }
+    errs <- c(errs, .node_v02_problems(self))
     if (length(self@operator) != 1L || !self@operator %in% .OAP_OPERATORS) {
       errs <- c(errs, sprintf("`operator` must be one of {%s}",
                               paste(.OAP_OPERATORS, collapse = ", ")))
@@ -130,7 +160,8 @@ oap_plan <- S7::new_class(
         return(sprintf("node '%s' consumes unknown node '%s'", n@id, e$from))
       }
     }
-    NULL
+    errs <- .plan_v02_problems(self@nodes)
+    if (length(errs)) paste(errs, collapse = "; ") else NULL
   }
 )
 
@@ -154,6 +185,11 @@ oap_plan <- S7::new_class(
 #' @examples
 #' lens <- node("lens", tool = "my_lens", emits = "treatment_effects")
 #' lens@tool_ref
+#' check <- node("check", tool = "my_check", emits = "treatment_effects",
+#'               consumes = list(edge("lens", "treatment_effects")),
+#'               when = "lens.metrics.p_value < 0.05",
+#'               foreach = c("site_a", "site_b"))
+#' check@foreach
 #' gate <- node("gate", consumes = list(edge("lens", "treatment_effects")),
 #'              emits = "decisions", operator = "abstain_gate",
 #'              params = list(n_min = 25L))
@@ -162,14 +198,22 @@ oap_plan <- S7::new_class(
 #' @export
 node <- function(id, tool = function(...) NULL, consumes = list(),
                  emits = "any", operator = "compute", role = "compute",
-                 params = list()) {
+                 params = list(), when = "", foreach = NULL,
+                 foreach_max = 50L, on_refusal = "continue") {
   tref <- ""
   if (is.character(tool)) {
     tref <- tool
     tool <- function(...) NULL
   }
+  if (!is.null(foreach) && is.atomic(foreach)) foreach <- as.list(foreach)
+  if (is.numeric(foreach_max) && length(foreach_max) == 1L &&
+      isTRUE(foreach_max == round(foreach_max))) {
+    foreach_max <- as.integer(foreach_max)
+  }
   oap_node(id = id, tool = tool, tool_ref = tref, consumes = consumes,
-           emits = emits, operator = operator, role = role, params = params)
+           emits = emits, operator = operator, role = role, params = params,
+           when = when, foreach = foreach, foreach_max = foreach_max,
+           on_refusal = on_refusal)
 }
 
 #' Declare a typed edge

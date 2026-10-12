@@ -1,0 +1,22 @@
+{
+  "id": "meta",
+  "meta": {
+    "question": "What is it worth?",
+    "authors": [
+      "A",
+      "B"
+    ],
+    "sealed": true,
+    "dates": {
+      "seal": "2026-10-12"
+    },
+    "note": null
+  },
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "id": "when_in",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "a"
+        }
+      ],
+      "when": "a.headline %in% c(\"effect\", \"no_effect\")"
+    }
+  ]
+}

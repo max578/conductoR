@@ -1,0 +1,22 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ],
+      "when": "`a.headline` == \"effect\""
+    }
+  ]
+}

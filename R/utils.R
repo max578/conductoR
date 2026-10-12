@@ -51,11 +51,13 @@
 
 # SHA-256 of a plan: its nodes, edges, parameters and the code each node
 # runs, so editing a tool changes the hash as surely as editing the plan.
+# A v0.2 field enters the hash only when it differs from its default.
 .plan_hash <- function(plan) {
   spec <- lapply(plan@nodes, function(n) {
-    list(id = n@id, role = n@role, operator = n@operator, emits = n@emits,
-         consumes = n@consumes, params = n@params, tool_ref = n@tool_ref,
-         code = if (n@operator == "compute") .tool_code(n) else NULL)
+    c(list(id = n@id, role = n@role, operator = n@operator, emits = n@emits,
+           consumes = n@consumes, params = n@params, tool_ref = n@tool_ref,
+           code = if (n@operator == "compute") .tool_code(n) else NULL),
+      .node_v02_fields(n))
   })
   .object_hash(list(id = plan@id, nodes = spec))
 }

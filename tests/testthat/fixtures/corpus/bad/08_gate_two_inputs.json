@@ -1,0 +1,30 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "g",
+      "operator": "abstain_gate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        },
+        {
+          "from": "b",
+          "contract": "treatment_effects"
+        }
+      ]
+    }
+  ]
+}

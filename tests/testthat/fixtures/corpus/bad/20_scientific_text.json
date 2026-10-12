@@ -1,0 +1,13 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "params": {
+        "n_draws": "1e3"
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "f",
+      "tool": "t",
+      "emits": "parameters"
+    },
+    {
+      "id": "s",
+      "operator": "select",
+      "consumes": [
+        {
+          "from": "f",
+          "contract": "parameters"
+        }
+      ],
+      "params": {}
+    }
+  ]
+}

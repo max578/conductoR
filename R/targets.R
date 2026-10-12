@@ -33,6 +33,10 @@ terminal_target <- function(plan) {
 #' up-to-date nodes from 'targets' while every edge stays type-checked. Target
 #' names are the node ids prefixed with `n_`.
 #'
+#' A plan whose nodes use `when`, `foreach` or `on_refusal` is refused with
+#' an error of class `conductoR_unsupported`, since those are applied by
+#' [conduct()]. A `select` node compiles like any other node.
+#'
 #' @param plan An [oap_plan].
 #' @param script_file The path to write.
 #' @param preamble Lines of R placed at the top of the script. They must bind
@@ -59,6 +63,17 @@ terminal_target <- function(plan) {
 #' @export
 compile_to_targets <- function(plan, script_file, preamble = character(0)) {
   stopifnot(S7::S7_inherits(plan, oap_plan))
+  for (n in plan@nodes) {
+    used <- setdiff(names(.node_v02_fields(n)), "foreach_max")
+    if (length(used)) {
+      cnd <- structure(class = c("conductoR_unsupported", "error", "condition"),
+        list(message = sprintf(paste0(
+          "compile_to_targets() does not support %s (node '%s'); perform ",
+          "this plan with conduct()"),
+          paste0("`", used, "`", collapse = ", "), n@id), call = NULL))
+      stop(cnd)
+    }
+  }
   tlines <- vapply(plan@nodes, function(n) {
     deps <- .edge_sources(n)
     inl <- if (length(deps)) {

@@ -1,0 +1,23 @@
+{
+  "id": "params",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "params": {
+        "alpha": 0.05,
+        "reps": 1000,
+        "robust": false,
+        "levels": [
+          "low",
+          "high"
+        ],
+        "options": {
+          "method": "REML",
+          "tol": 0.0001
+        }
+      }
+    }
+  ]
+}

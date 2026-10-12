@@ -1,0 +1,9 @@
+{
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    }
+  ]
+}

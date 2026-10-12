@@ -1,0 +1,67 @@
+{
+  "id": "dual",
+  "meta": {
+    "question": "Is there an effect?"
+  },
+  "nodes": [
+    {
+      "id": "mechanism",
+      "role": "mechanism",
+      "operator": "compute",
+      "emits": "parameters",
+      "consumes": [],
+      "params": [],
+      "tool": "t_mech"
+    },
+    {
+      "id": "kernel",
+      "tool": "t_kernel",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "mechanism",
+          "contract": "parameters"
+        }
+      ]
+    },
+    {
+      "id": "dynamic",
+      "tool": "t_dynamic",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "gate",
+      "operator": "abstain_gate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "kernel",
+          "contract": "treatment_effects"
+        }
+      ],
+      "params": {
+        "n_min": 25,
+        "z_floor": 2.0
+      }
+    },
+    {
+      "id": "consensus",
+      "operator": "triangulate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "kernel",
+          "contract": "treatment_effects"
+        },
+        {
+          "from": "dynamic",
+          "contract": "treatment_effects"
+        },
+        {
+          "from": "gate",
+          "contract": "decisions"
+        }
+      ]
+    }
+  ]
+}

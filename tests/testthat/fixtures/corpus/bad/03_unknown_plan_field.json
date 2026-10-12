@@ -1,0 +1,11 @@
+{
+  "id": "x",
+  "version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    }
+  ]
+}

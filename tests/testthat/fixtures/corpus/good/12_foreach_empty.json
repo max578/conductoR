@@ -1,0 +1,23 @@
+{
+  "id": "fe_empty",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "foreach": []
+    },
+    {
+      "id": "d",
+      "tool": "t_d",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ]
+    }
+  ]
+}

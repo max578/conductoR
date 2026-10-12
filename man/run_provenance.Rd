@@ -12,7 +12,9 @@ run_provenance(run)
 \value{
 A data frame with one row per node in execution order and columns
 \code{node}, \code{operator}, \code{role}, \code{consumes} (upstream ids joined with \code{+}),
-\code{emits}, \code{emitter}, \code{run_id}, \code{data_hash}, \code{abstained} and \code{seconds}.
+\code{emits}, \code{emitter}, \code{run_id}, \code{data_hash}, \code{abstained}, \code{seconds},
+\code{status} (\code{ran}, \code{refused} or \code{skipped}) and \code{reason} (why a node was
+skipped, otherwise empty).
 }
 \description{
 A run's provenance as a table
@@ -22,7 +24,9 @@ A run's provenance as a table
 When \code{\link[=conduct]{conduct()}} is given \code{out_dir}, it writes three files there:
 \code{run.rds} (the whole run object), \code{run_card.md} (this table and the
 terminal verdict) and \code{provenance.md} (a front-matter record with the chain
-of node ids and payload hashes in execution order).
+of node ids and payload hashes in execution order). When the run skipped
+nodes, evaluated \code{when} conditions or ran \code{foreach} items, both Markdown
+files list them with their reasons, values and statuses.
 }
 
 \examples{

@@ -1,0 +1,12 @@
+{
+  "id": "x",
+  "nodes": [
+    {
+      "id": "s",
+      "operator": "select",
+      "params": {
+        "rule": "p < 0.05"
+      }
+    }
+  ]
+}

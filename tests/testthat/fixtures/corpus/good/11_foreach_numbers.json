@@ -1,0 +1,17 @@
+{
+  "id": "fe_numbers",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "foreach": [
+        2019,
+        2020,
+        2021
+      ],
+      "foreach_max": 3
+    }
+  ]
+}

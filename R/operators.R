@@ -1,8 +1,9 @@
-# operators.R -- The two epistemic operators the engine performs itself.
+# operators.R -- The operators the engine performs itself.
 #
-# Both read the typed `summary` slot of the manifests they consume and emit
-# a `decisions` manifest through the internal emitters in emitters.R. The
-# policies are documented on conduct().
+# The gate and the triangulation read the typed `summary` slot of the
+# manifests they consume and emit a `decisions` manifest through the internal
+# emitters in emitters.R. The selection keeps rows of its input's `params`
+# table. The policies are documented on conduct().
 
 .op_abstain_gate <- function(node, inputs) {
   if (length(node@consumes) != 1L) {
@@ -126,4 +127,35 @@
     gate = if (!is.null(gate)) gate@summary$headline else NA_character_,
     rerouted = gated_out && reroute,
     consumed = Filter(Negate(is.null), c(unname(lens_ms), list(gate))))
+}
+
+.op_select <- function(node, inputs) {
+  src_id <- node@consumes[[1]]$from
+  m   <- inputs[[src_id]]
+  tab <- m@params
+  rule <- node@params$rule
+  chk <- .cond_check(rule, "rule")
+  if (length(chk$problems)) {
+    stop(sprintf("select '%s': %s", node@id, chk$problems[1]), call. = FALSE)
+  }
+  keep <- .cond_value(chk$expr, function(name) {
+    if (!name %in% names(tab)) {
+      stop(sprintf(paste0("select '%s': the rule reads column '%s', which ",
+                          "'%s' does not have; its columns are: %s"),
+                   node@id, name, src_id,
+                   if (ncol(tab)) paste(names(tab), collapse = ", ") else "(none)"),
+           call. = FALSE)
+    }
+    tab[[name]]
+  })
+  if (!is.logical(keep) || !length(keep) %in% c(1L, nrow(tab))) {
+    stop(sprintf("select '%s': the rule `%s` must give TRUE or FALSE per row",
+                 node@id, rule), call. = FALSE)
+  }
+  keep <- rep_len(keep, nrow(tab))
+  n_na <- sum(is.na(keep))
+  keep[is.na(keep)] <- FALSE
+  kept <- tab[keep, , drop = FALSE]
+  rownames(kept) <- NULL
+  select_to_manifest(kept, m, rule = rule, n_in = nrow(tab), n_na = n_na)
 }

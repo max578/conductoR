@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/max578/conductoR/blob/main/inst/schema/oap_plan_v0.2.schema.json",
+  "title": "conductoR analytical plan, language version 0.2",
+  "description": "An analytical plan: a directed acyclic graph of nodes, each bound to a tool or to an operator the engine performs. Every field added in version 0.2 is optional, so a version 0.1 plan is a valid version 0.2 plan. plan_validate() in R makes the same checks and adds three this schema cannot express: every edge and every condition names a node of the plan, the graph has no cycle, and conditions follow the grammar.",
+  "type": "object",
+  "required": ["id", "nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "The name of the plan.",
+      "allOf": [{"$ref": "#/$defs/text"}, {"minLength": 1}]
+    },
+    "plan_version": {
+      "description": "The version of the plan language, as a quoted string. Absent means \"0.1\".",
+      "enum": ["0.1", "0.2"]
+    },
+    "meta": {
+      "description": "Free-form information about the plan, such as the question it answers.",
+      "$ref": "#/$defs/mapping"
+    },
+    "nodes": {
+      "description": "The steps of the plan. Order does not matter; the engine orders them by their edges.",
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/node"}
+    }
+  },
+  "$defs": {
+    "text": {
+      "description": "A string. A number in scientific notation written as text is refused; write numbers plainly.",
+      "type": "string",
+      "not": {"pattern": "^[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)[eE][-+]?[0-9]+$"}
+    },
+    "target": {
+      "description": "An inferential target of the orchestraManifest contract, or \"any\".",
+      "enum": ["any", "parameters", "predictions", "treatment_effects", "decisions",
+               "breeding_values", "marker_associations", "structure", "consensus"]
+    },
+    "condition": {
+      "description": "A condition in the plan grammar: references such as lens.headline, lens.abstained, lens.n_rows or lens.metrics.p_value (in a select rule, column names), numbers written plainly, quoted strings, TRUE, FALSE, the comparisons == != < <= > >=, %in% with c(...), & | ! and brackets. Function calls, $, ::, backticks and assignment are refused.",
+      "allOf": [{"$ref": "#/$defs/text"}, {"pattern": "^[^`]*$"}]
+    },
+    "value": {
+      "anyOf": [
+        {"$ref": "#/$defs/text"},
+        {"type": "number"},
+        {"type": "boolean"},
+        {"type": "null"},
+        {"type": "array", "items": {"$ref": "#/$defs/value"}},
+        {"type": "object", "additionalProperties": {"$ref": "#/$defs/value"}}
+      ]
+    },
+    "mapping": {
+      "anyOf": [
+        {"type": "object", "additionalProperties": {"$ref": "#/$defs/value"}},
+        {"type": "array", "maxItems": 0}
+      ]
+    },
+    "edge": {
+      "description": "An input of the node: the upstream node and the inferential target it must declare.",
+      "type": "object",
+      "required": ["from"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {"$ref": "#/$defs/text"},
+        "contract": {"$ref": "#/$defs/target"}
+      }
+    },
+    "gate_params": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": {"$ref": "#/$defs/value"},
+          "properties": {
+            "mode": {"enum": ["flag", "halt-branch", "reroute"]},
+            "n_min": {"type": "integer", "minimum": 0},
+            "z_floor": {"type": "number"},
+            "floors": {
+              "anyOf": [
+                {"type": "object", "additionalProperties": {"type": "number"}},
+                {"type": "array", "maxItems": 0}
+              ]
+            }
+          }
+        },
+        {"type": "array", "maxItems": 0}
+      ]
+    },
+    "node": {
+      "type": "object",
+      "required": ["id"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "The node's name, unique within the plan. No dots, square brackets or white space.",
+          "allOf": [{"$ref": "#/$defs/text"}, {"minLength": 1, "pattern": "^[^.\\[\\]\\s]+$"}]
+        },
+        "role": {"description": "A free-text label for the component.", "$ref": "#/$defs/text"},
+        "tool": {"description": "A registered tool name, a pkg::fn reference or script:<path>::<fn>.", "$ref": "#/$defs/text"},
+        "operator": {
+          "description": "compute calls the tool; abstain_gate, triangulate and select are performed by the engine.",
+          "enum": ["compute", "abstain_gate", "triangulate", "select"]
+        },
+        "emits": {"description": "The inferential target the node's result must declare.", "$ref": "#/$defs/target"},
+        "consumes": {"type": "array", "items": {"$ref": "#/$defs/edge"}},
+        "params": {"description": "Parameters passed to the tool or the operator.", "$ref": "#/$defs/mapping"},
+        "when": {
+          "description": "Run the node only when this condition is TRUE; otherwise it and its descendants are skipped.",
+          "$ref": "#/$defs/condition"
+        },
+        "foreach": {
+          "description": "Run the node once per item: a list of items, or the distinct values of a column of the params table of a node it consumes.",
+          "oneOf": [
+            {
+              "type": "array",
+              "uniqueItems": true,
+              "items": {"anyOf": [{"$ref": "#/$defs/text"}, {"type": "number"}]}
+            },
+            {
+              "type": "object",
+              "required": ["from", "column"],
+              "additionalProperties": false,
+              "properties": {
+                "from": {"$ref": "#/$defs/text"},
+                "column": {"$ref": "#/$defs/text"}
+              }
+            }
+          ]
+        },
+        "foreach_max": {"description": "The largest number of items allowed; default 50.", "type": "integer", "minimum": 1},
+        "on_refusal": {
+          "description": "What an abstaining result does: continue (default), halt-branch (skip descendants) or stop (end the run).",
+          "enum": ["continue", "halt-branch", "stop"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"operator": {"const": "compute"}}},
+          "then": {"required": ["tool"], "properties": {"tool": {"minLength": 1}}}
+        },
+        {
+          "if": {"required": ["operator"], "properties": {"operator": {"const": "abstain_gate"}}},
+          "then": {
+            "required": ["consumes"],
+            "properties": {
+              "consumes": {"minItems": 1, "maxItems": 1},
+              "params": {"$ref": "#/$defs/gate_params"}
+            }
+          }
+        },
+        {
+          "if": {"required": ["operator"], "properties": {"operator": {"const": "select"}}},
+          "then": {
+            "required": ["consumes", "params"],
+            "properties": {
+              "consumes": {"minItems": 1, "maxItems": 1},
+              "params": {"type": "object", "required": ["rule"], "properties": {"rule": {"allOf": [{"$ref": "#/$defs/condition"}, {"minLength": 1}]}}}
+            }
+          }
+        },
+        {
+          "if": {"required": ["foreach"]},
+          "then": {
+            "required": ["emits"],
+            "properties": {
+              "operator": {"const": "compute"},
+              "emits": {"not": {"const": "any"}},
+              "params": {"not": {"type": "object", "required": ["item"]}}
+            }
+          }
+        }
+      ]
+    }
+  }
+}

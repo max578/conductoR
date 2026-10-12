@@ -12,7 +12,11 @@ oap_node(
   consumes = list(),
   emits = "any",
   operator = "compute",
-  params = list()
+  params = list(),
+  when = "",
+  foreach = NULL,
+  foreach_max = 50L,
+  on_refusal = "continue"
 )
 }
 \arguments{
@@ -31,9 +35,25 @@ accepts, or \code{""} for an in-session closure.}
 \item{emits}{The inferential target the node's output must declare, one of
 \code{\link[orchestraManifest:inferential_targets]{orchestraManifest::inferential_targets()}} or \code{"any"}.}
 
-\item{operator}{One of \code{"compute"}, \code{"abstain_gate"} or \code{"triangulate"}.}
+\item{operator}{One of \code{"compute"}, \code{"abstain_gate"}, \code{"triangulate"} or
+\code{"select"}.}
 
-\item{params}{A named list of operator parameters.}
+\item{params}{A named list of operator parameters. A \code{"select"} node needs
+\code{rule}, a row condition written in the grammar described in \code{\link[=conduct]{conduct()}}.}
+
+\item{when}{A condition that must be \code{TRUE} for the node to run, or \code{""}
+to always run it. See the \emph{Conditions} section of \code{\link[=conduct]{conduct()}}.}
+
+\item{foreach}{\code{NULL} to run the node once; a list of items to run it once
+per item; or \verb{list(from = <node id>, column = <name>)} to take the items
+from a column of the \code{params} table of a node this node consumes.}
+
+\item{foreach_max}{The largest number of items a \code{foreach} may run. More
+items stop the run with an error.}
+
+\item{on_refusal}{What an abstaining result of this node does: \code{"continue"}
+passes it on, \code{"halt-branch"} skips every node downstream, \code{"stop"} ends
+the run.}
 }
 \value{
 An \code{oap_node} object.
@@ -55,6 +75,14 @@ every lens it consumes into one consensus.
 A tool may be an in-session closure or a string reference that
 \code{\link[=resolve_tool]{resolve_tool()}} resolves when the node runs. The reference form is what
 makes a plan portable, see \code{\link[=plan_to_yaml]{plan_to_yaml()}}.
+
+A \code{"select"} node keeps the rows of its one input's \code{params} table that
+meet \code{params$rule}, and emits them under the input's inferential target.
+
+\code{when}, \code{foreach}, \code{foreach_max} and \code{on_refusal} are applied by
+\code{\link[=conduct]{conduct()}}; see its sections for what each does. Node ids may not contain
+dots, square brackets or white space, because conditions refer to nodes as
+\verb{<node>.<field>} and \code{foreach} instances are named \verb{<node>[<item>]}.
 }
 \examples{
 n <- oap_node(id = "lens", emits = "treatment_effects")

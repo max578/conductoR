@@ -11,7 +11,11 @@ node(
   emits = "any",
   operator = "compute",
   role = "compute",
-  params = list()
+  params = list(),
+  when = "",
+  foreach = NULL,
+  foreach_max = 50L,
+  on_refusal = "continue"
 )
 }
 \arguments{
@@ -26,11 +30,27 @@ the forms \code{\link[=resolve_tool]{resolve_tool()}} accepts.}
 \item{emits}{The inferential target the node's output must declare, one of
 \code{\link[orchestraManifest:inferential_targets]{orchestraManifest::inferential_targets()}} or \code{"any"}.}
 
-\item{operator}{One of \code{"compute"}, \code{"abstain_gate"} or \code{"triangulate"}.}
+\item{operator}{One of \code{"compute"}, \code{"abstain_gate"}, \code{"triangulate"} or
+\code{"select"}.}
 
 \item{role}{A free-text label for the component the node stands for.}
 
-\item{params}{A named list of operator parameters.}
+\item{params}{A named list of operator parameters. A \code{"select"} node needs
+\code{rule}, a row condition written in the grammar described in \code{\link[=conduct]{conduct()}}.}
+
+\item{when}{A condition that must be \code{TRUE} for the node to run, or \code{""}
+to always run it. See the \emph{Conditions} section of \code{\link[=conduct]{conduct()}}.}
+
+\item{foreach}{\code{NULL} to run the node once; a list of items to run it once
+per item; or \verb{list(from = <node id>, column = <name>)} to take the items
+from a column of the \code{params} table of a node this node consumes.}
+
+\item{foreach_max}{The largest number of items a \code{foreach} may run. More
+items stop the run with an error.}
+
+\item{on_refusal}{What an abstaining result of this node does: \code{"continue"}
+passes it on, \code{"halt-branch"} skips every node downstream, \code{"stop"} ends
+the run.}
 }
 \value{
 An \link{oap_node}.
@@ -43,6 +63,11 @@ resolved by \code{\link[=resolve_tool]{resolve_tool()}} when the node runs.
 \examples{
 lens <- node("lens", tool = "my_lens", emits = "treatment_effects")
 lens@tool_ref
+check <- node("check", tool = "my_check", emits = "treatment_effects",
+              consumes = list(edge("lens", "treatment_effects")),
+              when = "lens.metrics.p_value < 0.05",
+              foreach = c("site_a", "site_b"))
+check@foreach
 gate <- node("gate", consumes = list(edge("lens", "treatment_effects")),
              emits = "decisions", operator = "abstain_gate",
              params = list(n_min = 25L))

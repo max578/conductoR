@@ -1,0 +1,23 @@
+{
+  "id": "when_brackets",
+  "plan_version": "0.2",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [
+        {
+          "from": "a",
+          "contract": "treatment_effects"
+        }
+      ],
+      "when": "(a.metrics.effect > -0.5) || (a.n_rows >= 10)"
+    }
+  ]
+}

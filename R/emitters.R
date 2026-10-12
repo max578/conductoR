@@ -133,3 +133,53 @@ triangulate_to_manifest <- function(consensus, agree, lenses, n_lenses, gate,
                     consumed = consumed,
                     metadata = list(source = "conductoR:triangulate"))
 }
+
+select_to_manifest <- function(kept, upstream, rule, n_in, n_na) {
+  summ <- orchestraManifest::manifest_summary(
+    headline = "selected", abstained = FALSE,
+    metrics = list(rule = rule, n_in = as.integer(n_in),
+                   n_kept = nrow(kept), n_na = as.integer(n_na)))
+  dh <- orchestraManifest::manifest_data_hash(kept, NULL, NULL, NULL,
+                                              NA_integer_, summ)
+  orchestraManifest::orchestra_manifest(
+    emitter_package = "conductoR", emitter_version = .conductor_version(),
+    inferential_target = upstream@inferential_target,
+    run_id = paste0("select-", .summary_digest(list(summ, kept))),
+    method = "select:rule", seed = NA_integer_, params = kept, summary = summ,
+    consumed_manifests = list(orchestraManifest::manifest_lineage(upstream)),
+    metadata = list(derived = TRUE, source = "conductoR:select"),
+    timestamp = Sys.time(), data_hash = dh)
+}
+
+# One manifest for a node run once per item: the instance manifests in
+# `outputs`, named by instance id, and one row per item in `params`.
+foreach_to_manifest <- function(node, items, target) {
+  outs <- Filter(Negate(is.null), stats::setNames(
+    lapply(items, function(it) it$manifest),
+    vapply(items, function(it) it$instance, character(1))))
+  if (length(outs) == 0L) outs <- NULL
+  tab <- data.frame(
+    item     = vapply(items, function(it) it$item, character(1)),
+    instance = vapply(items, function(it) it$instance, character(1)),
+    status   = vapply(items, function(it) it$status, character(1)),
+    run_id   = vapply(items, function(it) it$run_id, character(1)),
+    headline = vapply(items, function(it) it$headline, character(1)),
+    stringsAsFactors = FALSE)
+  status <- tab$status
+  summ <- orchestraManifest::manifest_summary(
+    headline = "foreach", abstained = FALSE,
+    metrics = list(n_items = nrow(tab), n_ran = sum(status == "ran"),
+                   n_refused = sum(status == "refused"),
+                   n_skipped = sum(status == "skipped")))
+  dh <- orchestraManifest::manifest_data_hash(tab, outs, NULL, NULL,
+                                              NA_integer_, summ)
+  orchestraManifest::orchestra_manifest(
+    emitter_package = "conductoR", emitter_version = .conductor_version(),
+    inferential_target = target,
+    run_id = paste0("foreach-", .summary_digest(list(node@id, tab))),
+    method = "foreach:items", seed = NA_integer_, params = tab,
+    outputs = outs, summary = summ,
+    consumed_manifests = lapply(unname(outs), orchestraManifest::manifest_lineage),
+    metadata = list(derived = !is.null(outs), source = "conductoR:foreach"),
+    timestamp = Sys.time(), data_hash = dh)
+}

@@ -1,0 +1,27 @@
+{
+  "id": "floors",
+  "nodes": [
+    {
+      "id": "cox",
+      "tool": "t_cox",
+      "emits": "treatment_effects"
+    },
+    {
+      "id": "epv_gate",
+      "operator": "abstain_gate",
+      "emits": "decisions",
+      "consumes": [
+        {
+          "from": "cox",
+          "contract": "treatment_effects"
+        }
+      ],
+      "params": {
+        "mode": "flag",
+        "floors": {
+          "epv": 10.0
+        }
+      }
+    }
+  ]
+}

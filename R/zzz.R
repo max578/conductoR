@@ -5,7 +5,7 @@
 # package so that a new target added there is accepted here without a
 # release.
 
-.OAP_OPERATORS <- c("compute", "abstain_gate", "triangulate")
+.OAP_OPERATORS <- c("compute", "abstain_gate", "triangulate", "select")
 .OAP_CONTRACTS <- "any"
 
 .onLoad <- function(libname, pkgname) {

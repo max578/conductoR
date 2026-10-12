@@ -14,7 +14,10 @@ Two operators are built in: an abstention gate that will not pass a null
 verdict the design could not have resolved, and a triangulation that
 reconciles any number of lenses on one question. A plan round-trips through
 YAML (\code{\link[=plan_to_yaml]{plan_to_yaml()}}, \code{\link[=plan_from_yaml]{plan_from_yaml()}}) and compiles to a 'targets'
-pipeline (\code{\link[=compile_to_targets]{compile_to_targets()}}).
+pipeline (\code{\link[=compile_to_targets]{compile_to_targets()}}). A plan can run a node only when a
+condition on earlier results holds, run it once per item, and select the
+rows of a result; \code{\link[=plan_validate]{plan_validate()}} checks a plan file against the
+language and \code{\link[=plan_schema]{plan_schema()}} returns its JSON Schema.
 }
 \seealso{
 Useful links:

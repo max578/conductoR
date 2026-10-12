@@ -71,9 +71,9 @@ reads results of nodes upstream: \verb{<node>.headline}, \verb{<node>.abstained}
 It may use numbers written plainly, quoted strings, \code{TRUE}, \code{FALSE}, the
 comparisons \code{==}, \code{!=}, \code{<}, \code{<=}, \code{>}, \code{>=}, \code{\%in\%} with \code{c(...)}, the
 logical operators \code{&}, \code{|}, \code{!} (\code{&&} and \code{||} read the same) and
-brackets. Anything else, such as a function call, \code{$}, \code{::}, backticks or
-an assignment, is refused when the plan is built. A condition is never
-run as R code.
+brackets. A function call, \code{$}, \code{::}, backticks, an assignment and
+anything else not listed here are refused when the plan is built. A
+condition is never run as R code.
 
 A \code{select} node keeps the rows of its input's \code{params} table for which
 \code{params$rule} is \code{TRUE}. The rule follows the same grammar, with column

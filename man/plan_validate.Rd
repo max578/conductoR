@@ -20,8 +20,7 @@ the rule it breaks and how to fix it. A person or an AI model can repair a
 plan from this table and check it again.
 }
 \details{
-A YAML plan is read so that unquoted \code{yes}, \code{no}, \code{on} and \code{off} stay as
-written. They are refused, since YAML 1.1 reads them as logicals; write
+In a YAML plan, an unquoted \code{yes}, \code{no}, \code{on} or \code{off} is refused: write
 \code{true} or \code{false} for a logical, or quote the word for text. A number in
 scientific notation (\code{1e3}) is refused with its plain form (\code{1000}). The
 structure checks follow the JSON Schema returned by \code{\link[=plan_schema]{plan_schema()}}.

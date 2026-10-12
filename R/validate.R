@@ -156,7 +156,7 @@
 
 .cond_fix <- function(problem, general) {
   if (grepl("plain number", problem, fixed = TRUE)) {
-    "write numbers in plain decimal form, such as 0.05 or 1000"
+    "write numbers in plain decimal form: 0.05, 1000"
   } else {
     general
   }
@@ -175,7 +175,7 @@
     }
     if (!.is_string(params$rule)) {
       out <- c(out, list(.prob("params.rule", "a select node needs a rule",
-                               "write the rule as a string, such as \"p_value < 0.05\"")))
+                               "write the rule as a quoted string: \"p_value < 0.05\"")))
     } else {
       for (m in .cond_check(params$rule, "rule")$problems) {
         out <- c(out, list(.prob("params.rule", m, .cond_fix(m, sprintf(
@@ -202,7 +202,7 @@
   }
   if (!.is_whole(foreach_max) || foreach_max < 1) {
     out <- c(out, list(.prob("foreach_max", "must be a whole number of at least 1",
-                             "write a plain whole number, such as 50")))
+                             "write a plain whole number; the default is 50")))
   }
   if (!is.null(foreach)) {
     if (!identical(operator, "compute")) {
@@ -445,10 +445,10 @@
             "use flag, halt-branch or reroute, in quotes")
       }
       if (!is.null(params$n_min) && !(.is_whole(params$n_min) && params$n_min >= 0)) {
-        bad("params.n_min", "must be a whole number", "write a plain whole number, such as 25")
+        bad("params.n_min", "must be a whole number", "write a plain whole number; the default is 25")
       }
       if (!is.null(params$z_floor) && !(is.numeric(params$z_floor) && length(params$z_floor) == 1L)) {
-        bad("params.z_floor", "must be a number", "write a plain number, such as 2.0")
+        bad("params.z_floor", "must be a number", "write a plain number; the default is 2.0")
       }
       fl <- params$floors
       if (!is.null(fl) && !(.is_map(fl) && all(vapply(fl, function(v) is.numeric(v) && length(v) == 1L, logical(1))))) {
@@ -462,7 +462,7 @@
     }
     fmax <- x$foreach_max %||% 50L
     if (!(.is_whole(fmax) && fmax >= 1)) {
-      bad("foreach_max", "must be a whole number of at least 1", "write a plain whole number, such as 50")
+      bad("foreach_max", "must be a whole number of at least 1", "write a plain whole number; the default is 50")
       fmax <- 50L
     }
     onr <- x$on_refusal %||% "continue"
@@ -548,8 +548,7 @@
 #' plan from this table and check it again.
 #'
 #' @details
-#' A YAML plan is read so that unquoted `yes`, `no`, `on` and `off` stay as
-#' written. They are refused, since YAML 1.1 reads them as logicals; write
+#' In a YAML plan, an unquoted `yes`, `no`, `on` or `off` is refused: write
 #' `true` or `false` for a logical, or quote the word for text. A number in
 #' scientific notation (`1e3`) is refused with its plain form (`1000`). The
 #' structure checks follow the JSON Schema returned by [plan_schema()].
@@ -632,7 +631,7 @@ plan_from_json <- function(path) {
 #' cannot express: references between nodes, cycles and the condition
 #' grammar.
 #'
-#' @returns The path of `oap_plan_v0.2.schema.json` in the installed package.
+#' @returns The path of the schema file, `oap_plan_v0.2.schema.json`.
 #'
 #' @seealso [plan_validate()].
 #'

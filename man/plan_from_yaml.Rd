@@ -18,9 +18,8 @@ performed, so a plan loads without its tools present.
 }
 \details{
 The plan is checked by \code{\link[=plan_validate]{plan_validate()}} before it is built, and a plan
-with problems is an error that lists all of them. Unquoted \code{yes}, \code{no},
-\code{on} and \code{off} are refused rather than read as logicals, and numbers in
-scientific notation are refused with their plain form.
+with problems is an error that lists all of them, including any unquoted
+\code{yes}, \code{no}, \code{on} or \code{off} and any number in scientific notation.
 }
 \examples{
 f <- system.file("scores", "dual_lens_gate.oap.yaml", package = "conductoR")

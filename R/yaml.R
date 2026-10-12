@@ -160,9 +160,8 @@ plan_to_yaml <- function(plan, path = NULL) {
 #' performed, so a plan loads without its tools present.
 #'
 #' The plan is checked by [plan_validate()] before it is built, and a plan
-#' with problems is an error that lists all of them. Unquoted `yes`, `no`,
-#' `on` and `off` are refused rather than read as logicals, and numbers in
-#' scientific notation are refused with their plain form.
+#' with problems is an error that lists all of them, including any unquoted
+#' `yes`, `no`, `on` or `off` and any number in scientific notation.
 #'
 #' @param path A file path, or a string of YAML text.
 #'

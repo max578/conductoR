@@ -142,9 +142,9 @@ conduct_step <- function(node, inputs = list(), data = list()) {
 #' It may use numbers written plainly, quoted strings, `TRUE`, `FALSE`, the
 #' comparisons `==`, `!=`, `<`, `<=`, `>`, `>=`, `%in%` with `c(...)`, the
 #' logical operators `&`, `|`, `!` (`&&` and `||` read the same) and
-#' brackets. Anything else, such as a function call, `$`, `::`, backticks or
-#' an assignment, is refused when the plan is built. A condition is never
-#' run as R code.
+#' brackets. A function call, `$`, `::`, backticks, an assignment and
+#' anything else not listed here are refused when the plan is built. A
+#' condition is never run as R code.
 #'
 #' A `select` node keeps the rows of its input's `params` table for which
 #' `params$rule` is `TRUE`. The rule follows the same grammar, with column

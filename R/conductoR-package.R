@@ -10,7 +10,10 @@
 #' verdict the design could not have resolved, and a triangulation that
 #' reconciles any number of lenses on one question. A plan round-trips through
 #' YAML ([plan_to_yaml()], [plan_from_yaml()]) and compiles to a 'targets'
-#' pipeline ([compile_to_targets()]).
+#' pipeline ([compile_to_targets()]). A plan can run a node only when a
+#' condition on earlier results holds, run it once per item, and select the
+#' rows of a result; [plan_validate()] checks a plan file against the
+#' language and [plan_schema()] returns its JSON Schema.
 #'
 #' @keywords internal
 "_PACKAGE"

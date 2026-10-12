@@ -159,6 +159,169 @@ run_c <- conduct(again, data = d, verbose = FALSE)
 identical(run_c$terminal@run_id, run_a$terminal@run_id)
 ```
 
+## Writing a plan
+
+A plan can also be written directly as a file, by a person or by an AI
+model. Version 0.2 of the plan language adds four optional fields that let
+a plan act on its own results:
+
+| Field | What it does |
+|---|---|
+| `when` | runs the node only if a condition on upstream results is true |
+| `foreach` | runs the node once per item, from a list or from a column of an upstream result |
+| `on_refusal` | says what an abstaining result does: `continue`, `halt-branch` or `stop` |
+| `operator: select` | keeps the rows of an upstream table that meet a rule |
+
+The plan below asks which interactions in a two-way model of yield hold up.
+The first tool fits `yield ~ nitro * site` and returns one row per model
+term. A `select` node keeps the interaction terms with p < 0.05, and a check
+runs once for each kept term, but only if there is at least one.
+
+```{r term_tools}
+term_table <- function(inputs, data, node) {
+  a <- anova(lm(yield ~ nitro * site, data = data))
+  terms <- rownames(a)[rownames(a) != "Residuals"]
+  tab <- data.frame(term = terms,
+                    order = lengths(strsplit(terms, ":", fixed = TRUE)),
+                    p_value = a[terms, "Pr(>F)"])
+  summ <- orchestraManifest::manifest_summary("terms", metrics = list(n = nrow(data)))
+  orchestraManifest::orchestra_manifest(
+    emitter_package = "example", emitter_version = "0.1.0",
+    inferential_target = "parameters", run_id = "terms-1",
+    method = "lm:anova", params = tab, summary = summ, timestamp = Sys.time(),
+    data_hash = orchestraManifest::manifest_data_hash(tab, NULL, NULL, NULL,
+                                                      NA_integer_, summ))
+}
+```
+
+The check is a stand-in for an external validation: it refits the model on
+replicates R1 and R2, then on R3 and R4, and asks whether the term is
+significant in both halves. When a half has too few plots it abstains with
+`insufficient_evidence`, which `on_refusal: continue` records and passes on.
+
+```{r check_tool}
+check_term <- function(inputs, data, node) {
+  term <- node@params$item
+  p <- vapply(list(c("R1", "R2"), c("R3", "R4")), function(half) {
+    a <- anova(lm(yield ~ nitro * site, data = data[data$rep %in% half, ]))
+    a[term, "Pr(>F)"]
+  }, numeric(1))
+  verdict <- if (anyNA(p)) "insufficient_evidence"
+             else if (all(p < 0.05)) "replicated" else "not_replicated"
+  decision_to_manifest(verdict, emitter = "split_half",
+                       method = paste0("split_half:", term),
+                       metrics = list(p_first = p[1], p_second = p[2]))
+}
+
+register_tool("term_table", term_table)
+register_tool("check_term", check_term)
+```
+
+The plan as YAML. Every string is in quotes: YAML 1.1 reads an unquoted
+`yes`, `no`, `on` or `off` as a logical, so conductoR refuses those words
+unquoted rather than guess.
+
+```{r plan_v02}
+plan_text <- '
+id: "interactions"
+plan_version: "0.2"
+meta:
+  question: "Which nitrogen-by-site interactions hold up in both halves of the trial?"
+nodes:
+- id: "terms"
+  tool: "term_table"
+  emits: "parameters"
+- id: "flagged"
+  operator: "select"
+  emits: "parameters"
+  consumes:
+  - from: "terms"
+    contract: "parameters"
+  params:
+    rule: "order > 1 & p_value < 0.05"
+- id: "check"
+  tool: "check_term"
+  emits: "decisions"
+  consumes:
+  - from: "flagged"
+    contract: "parameters"
+  when: "flagged.n_rows > 0"
+  foreach:
+    from: "flagged"
+    column: "term"
+  foreach_max: 10
+  on_refusal: "continue"
+'
+interactions <- plan_from_yaml(plan_text)
+run_i <- conduct(interactions, data = d)
+run_i$conditions
+run_i$items[, c("item", "status")]
+run_i$bus$check@outputs[["check[nitro:site]"]]@summary$headline
+```
+
+One interaction, `nitro:site`, meets the rule on all 136 plots, and the
+check finds it significant in the first half but not in the second. The run
+record lists the condition, its value and every item with its status, so a
+blinded run and the unblinded run that follows it can be compared item by
+item.
+
+Conditions are read by conductoR, never run as R code. They may refer to
+`<node>.headline`, `<node>.abstained`, `<node>.n_rows` and
+`<node>.metrics.<name>`, and use plain numbers, quoted strings, comparisons,
+`%in%` with `c(...)`, `&`, `|`, `!` and brackets. Anything else is refused
+when the plan is read:
+
+```{r refused}
+res <- try(plan_from_yaml(sub("flagged.n_rows > 0", "system(cmd) == 0",
+                              plan_text, fixed = TRUE)), silent = TRUE)
+cat(conditionMessage(attr(res, "condition")))
+```
+
+### The schema and the repair loop
+
+`plan_schema()` returns a JSON Schema (draft 2020-12) of the language. An
+editor can check a plan against it as it is typed, and an AI model can use
+it to write a plan as structured output. The loop is: write the plan as JSON
+against the schema, check it with `plan_validate()`, and fix every problem
+the table lists. `plan_validate()` reports all the problems at once, each
+with the field, the node, the rule broken and the fix.
+
+```{r schema}
+schema <- jsonlite::fromJSON(plan_schema(), simplifyVector = FALSE)
+names(schema$`$defs`$node$properties)
+
+draft <- '{
+  "id": "interactions",
+  "plan_version": 0.2,
+  "nodes": [
+    {"id": "terms", "tool": "term_table", "emits": "parameters"},
+    {"id": "flagged", "operator": "select", "emits": "parameters",
+     "consumes": [{"from": "terms", "contract": "parameters"}],
+     "params": {"rule": "order > 1 & p_value < 5e-2"}},
+    {"id": "check", "tool": "check_term",
+     "consumes": [{"from": "flagged", "contract": "parameters"}],
+     "foreach": {"from": "flagged", "column": "term"},
+     "on_refuse": "continue"}
+  ]
+}'
+plan_validate(draft)[, c("node", "field", "fix")]
+```
+
+Each row says what to change. With the version quoted, the number written
+plainly, `emits` declared and the field name corrected, the plan is valid,
+and `plan_to_yaml()` writes the YAML a person reads.
+
+```{r schema_fixed}
+fixed <- draft
+fixed <- sub('"plan_version": 0.2', '"plan_version": "0.2"', fixed, fixed = TRUE)
+fixed <- sub("5e-2", "0.05", fixed, fixed = TRUE)
+fixed <- sub('"tool": "check_term",', '"tool": "check_term", "emits": "decisions",',
+             fixed, fixed = TRUE)
+fixed <- sub('"on_refuse"', '"on_refusal"', fixed, fixed = TRUE)
+nrow(plan_validate(fixed))
+cat(plan_to_yaml(plan_from_json(fixed)))
+```
+
 ## A mistyped edge
 
 An edge that declares the wrong contract is refused before the downstream

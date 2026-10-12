@@ -7,7 +7,7 @@
 plan_schema()
 }
 \value{
-The path of \code{oap_plan_v0.2.schema.json} in the installed package.
+The path of the schema file, \code{oap_plan_v0.2.schema.json}.
 }
 \description{
 The schema (JSON Schema 2020-12) describes every field a plan may hold,

@@ -1,0 +1,133 @@
+id: C2_v1.2
+meta:
+  question: What is the average effect of sowing wheat in the Early rather than the
+    Main window, where does it differ, and what is it worth?
+  addendum: studies/C2/plan_C2_v1.2_addendum.md
+nodes:
+- id: pc_L1
+  role: positive_control
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_pc_L1
+- id: pc_L2
+  role: positive_control
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_pc_L2
+- id: pc_L3
+  role: positive_control
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_pc_L3
+- id: gate_L1
+  role: compute
+  operator: abstain_gate
+  emits: decisions
+  consumes:
+  - from: pc_L1
+    contract: treatment_effects
+  params:
+    mode: halt-branch
+- id: gate_L2
+  role: compute
+  operator: abstain_gate
+  emits: decisions
+  consumes:
+  - from: pc_L2
+    contract: treatment_effects
+  params:
+    mode: halt-branch
+- id: gate_L3
+  role: compute
+  operator: abstain_gate
+  emits: decisions
+  consumes:
+  - from: pc_L3
+    contract: treatment_effects
+  params:
+    mode: halt-branch
+- id: L1
+  role: lens_asreml
+  operator: compute
+  emits: treatment_effects
+  consumes:
+  - from: gate_L1
+    contract: decisions
+  params: []
+  tool: tool_L1
+- id: L2
+  role: lens_flexybayes
+  operator: compute
+  emits: treatment_effects
+  consumes:
+  - from: gate_L2
+    contract: decisions
+  params: []
+  tool: tool_L2
+- id: L3
+  role: lens_proxymix
+  operator: compute
+  emits: treatment_effects
+  consumes:
+  - from: gate_L3
+    contract: decisions
+  params: []
+  tool: tool_L3
+- id: quorum
+  role: consensus
+  operator: compute
+  emits: decisions
+  consumes:
+  - from: L1
+    contract: treatment_effects
+  - from: L2
+    contract: treatment_effects
+  - from: L3
+    contract: treatment_effects
+  params: []
+  tool: tool_quorum
+- id: A0
+  role: crop_model_uncalibrated
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_A0
+- id: A1
+  role: crop_model_calibrated
+  operator: compute
+  emits: treatment_effects
+  consumes: []
+  params: []
+  tool: tool_A1
+- id: compare
+  role: comparison
+  operator: compute
+  emits: treatment_effects
+  consumes:
+  - from: L1
+    contract: treatment_effects
+  - from: L2
+    contract: treatment_effects
+  - from: A0
+    contract: treatment_effects
+  - from: A1
+    contract: treatment_effects
+  params: []
+  tool: tool_compare
+- id: money
+  role: value
+  operator: compute
+  emits: decisions
+  consumes:
+  - from: L2
+    contract: treatment_effects
+  params: []
+  tool: tool_money
+

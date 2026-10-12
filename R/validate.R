@@ -1,10 +1,6 @@
-# validate.R -- Read a plan file, check it against the plan language and
-# report every problem at once.
-#
-# A plan is read into plain lists (from YAML or JSON), checked here, and only
-# then built into an oap_plan. The rules mirror the published JSON Schema in
-# inst/schema/; the checks that a schema cannot express (references between
-# nodes, cycles, the condition grammar) are made here only.
+# validate.R -- Check a plan file against the plan language and report every
+# problem at once. Mirrors inst/schema/; references between nodes, cycles and
+# conditions are checked only here.
 
 .PLAN_FIELDS <- c("id", "plan_version", "meta", "nodes")
 .NODE_FIELDS <- c("id", "role", "tool", "operator", "emits", "consumes",

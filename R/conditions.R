@@ -1,8 +1,5 @@
-# conditions.R -- The condition grammar of `when` and of `select` rules.
-#
-# A condition is parsed by R's parser and then walked against a whitelist of
-# literals, references and operators. It is never evaluated as R code: the
-# interpreter below applies each whitelisted operator itself.
+# conditions.R -- The condition grammar of `when` and `select` rules: parsed by
+# R's parser, then interpreted against a whitelist; never passed to eval().
 
 .COND_COMPARE <- c("==", "!=", "<", "<=", ">", ">=")
 .COND_LOGIC   <- c("&", "|", "&&", "||")

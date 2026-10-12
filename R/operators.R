@@ -1,9 +1,5 @@
-# operators.R -- The operators the engine performs itself.
-#
-# The gate and the triangulation read the typed `summary` slot of the
-# manifests they consume and emit a `decisions` manifest through the internal
-# emitters in emitters.R. The selection keeps rows of its input's `params`
-# table. The policies are documented on conduct().
+# operators.R -- The operators the engine performs itself: the gate, the
+# triangulation and the selection. Their policies are documented on conduct().
 
 .op_abstain_gate <- function(node, inputs) {
   if (length(node@consumes) != 1L) {

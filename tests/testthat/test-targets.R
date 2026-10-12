@@ -28,7 +28,7 @@ test_that("a compiled plan runs under targets to the same verdict as conduct()",
   script <- file.path(dir, "_targets.R")
   store  <- file.path(dir, "_targets")
   compile_to_targets(p, script, preamble = c(
-    sprintf(".score <- readRDS(%s)", shQuote(file.path(dir, "plan.rds"))),
+    sprintf(".score <- readRDS(%s)", deparse(file.path(dir, "plan.rds"))),
     ".data <- list()"))
   targets::tar_make(script = script, store = store, callr_function = NULL,
                     reporter = "silent")

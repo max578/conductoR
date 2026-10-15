@@ -1,3 +1,9 @@
+# conductoR (development version)
+
+* The package has a logo.
+* README carries status badges and lists related packages.
+* CI runs lintr (report-only) and test coverage.
+
 # conductoR 0.2.0
 
 ## New features

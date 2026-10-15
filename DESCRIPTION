@@ -1,6 +1,6 @@
 Package: conductoR
 Title: Perform a Contract-Typed Analytical Plan Across Analytics Components
-Version: 0.2.0
+Version: 0.2.0.9000
 Authors@R:
     person(given = "Max",
            family = "Moldovan",

@@ -1,6 +1,6 @@
 # Lint workflow for conductoR, from the r-lib/actions v2 lint example.
 # Lints are reported in the log and do not fail the job: the package had
-# 225 lints when this workflow was added, and they are cleared in their own
+# 206 lints when this workflow was added, and they are cleared in their own
 # changes.
 
 on:

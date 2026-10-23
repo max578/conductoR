@@ -206,7 +206,7 @@ test_that("a trigger on a skipped node or a missing statistic is not fired", {
 test_that("an invalid trigger table is refused with every problem named", {
   run <- conduct(planted_plan(), verbose = FALSE)
   expect_error(evaluate_triggers(run, planted_triggers[, -3]),
-               "missing column\\(s\\): class")
+               "lacks these columns: class")
   bad <- planted_triggers
   bad$direction[1] <- "=>"
   bad$node[2] <- "nowhere"

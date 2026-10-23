@@ -10,8 +10,8 @@ evaluate_triggers(run, triggers)
 \item{run}{A run returned by \code{\link[=conduct]{conduct()}} or \code{\link[=try_conduct]{try_conduct()}}.}
 
 \item{triggers}{A data frame with columns \code{trigger_id}, \code{node}, \code{class}
-(\code{"anomaly"} or \code{"candidate"}), \code{signal_type} (a word such as
-\code{heterogeneity}, written with or without the prefix \verb{signal:}),
+(\code{"anomaly"} or \code{"candidate"}), \code{signal_type} (a lower-case word,
+written with or without the prefix \verb{signal:}),
 \code{statistic}, \code{direction} (\code{>}, \code{>=}, \code{<}, \code{<=} or \code{==}), \code{threshold},
 \code{action} (\code{"return"}, \code{"branch"} or \code{"release"}) and, optionally,
 \code{rehearsal_plant} (what was planted in rehearsal to show the trigger

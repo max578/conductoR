@@ -22,9 +22,7 @@
   ifelse(x %in% .ERROR_TYPES, x, "tool_error")
 }
 
-# The alphabet word for an error condition: a class that is a word, a message
-# that starts with `<word>:`, the walker's own contract messages, or else
-# `tool_error`.
+# The alphabet word for an error; the order is set out in try_conduct().
 .error_type_of <- function(e) {
   hit <- intersect(class(e), .ERROR_TYPES)
   if (length(hit)) return(hit[1])
@@ -152,8 +150,8 @@ try_conduct <- function(plan, data = list(), ...) {
 #'
 #' @param run A run returned by [conduct()] or [try_conduct()].
 #' @param triggers A data frame with columns `trigger_id`, `node`, `class`
-#'   (`"anomaly"` or `"candidate"`), `signal_type` (a word such as
-#'   `heterogeneity`, written with or without the prefix `signal:`),
+#'   (`"anomaly"` or `"candidate"`), `signal_type` (a lower-case word,
+#'   written with or without the prefix `signal:`),
 #'   `statistic`, `direction` (`>`, `>=`, `<`, `<=` or `==`), `threshold`,
 #'   `action` (`"return"`, `"branch"` or `"release"`) and, optionally,
 #'   `rehearsal_plant` (what was planted in rehearsal to show the trigger
@@ -230,7 +228,7 @@ evaluate_triggers <- function(run, triggers) {
   }
   miss <- setdiff(.TRIGGER_COLS, names(triggers))
   if (length(miss)) {
-    stop(sprintf("triggers is missing column(s): %s",
+    stop(sprintf("triggers lacks these columns: %s",
                  paste(miss, collapse = ", ")), call. = FALSE)
   }
   tab <- as.data.frame(triggers, stringsAsFactors = FALSE)
@@ -271,9 +269,7 @@ evaluate_triggers <- function(run, triggers) {
   tab
 }
 
-# The issue words of one manifest: `summary$metrics$issue`, the abstention
-# reason when it is an alphabet word, and the same for each instance of a
-# `foreach` node.
+# The issue words of one manifest and of its `foreach` instances.
 .manifest_issues <- function(m, nested = TRUE) {
   if (!orchestraManifest::is_orchestra_manifest(m)) return(character(0))
   s <- m@summary
@@ -291,9 +287,7 @@ evaluate_triggers <- function(run, triggers) {
   unique(out)
 }
 
-# The declared checks of one node and which of them passed. A check is a
-# metric holding one TRUE or FALSE; a check that is absent or holds anything
-# else did not pass.
+# A declared check that is absent or not a single TRUE did not pass.
 .node_checks <- function(m, declared) {
   metrics <- if (is.null(m)) list() else m@summary$metrics
   own <- metrics$checks
@@ -690,7 +684,7 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
   }
   unknown <- setdiff(names(requests), node_ids)
   if (length(unknown)) {
-    stop(sprintf("requests name node(s) that are not in the run: %s",
+    stop(sprintf("requests name nodes that are not in the run: %s",
                  paste(unknown, collapse = ", ")), call. = FALSE)
   }
   rows <- lapply(names(requests), function(id) {

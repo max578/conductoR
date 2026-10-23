@@ -4,6 +4,32 @@
 * README carries status badges and lists related packages.
 * CI runs lintr (report-only) and test coverage.
 
+## What returns to the composer
+
+* `run_record()` gives the dose-0 record of a run: one row per node with its
+  emitter, target, status (`completed`, `refused`, `skipped`, `failed`,
+  `not_run`), the typed error words it reported and the declared checks it
+  passed or failed, and one row per declared trigger with whether it fired.
+  It holds no data value. `format_record()` turns it into the typed message
+  lines: `stop`, `<node> <error word>` and `<trigger> signal:<type>`.
+* `evaluate_triggers()` reads each declared trigger's statistic from its
+  node's manifest and compares it with the threshold. The value stays in the
+  object it returns; the record keeps only whether the trigger fired.
+* `try_conduct()` runs a plan like `conduct()` and, when a node stops with an
+  error, returns a failed run naming the node and the typed error word, so a
+  run that fails still returns a message. `conduct()` itself is unchanged.
+* `run_return()` builds the message to the composer at a dose: the record
+  and its lines at dose 0, and at dose 1 or above the requested summary
+  metrics and `params` columns, each passed through a checker. Values not
+  returned are listed with the reason. `default_checker()` refuses a value
+  resting on fewer than `k` units, one where a single unit holds more than a
+  set share, and one with no unit count. It is a floor, not a disclosure
+  guarantee.
+* `write_return()` writes a return as a text file carrying the plan hash,
+  input hash, series, round and dose, under `<series>/round_<k>/`, and never
+  replaces one already written. `series_report()` lists the rounds of a
+  series and counts the returns above dose 0 against a budget.
+
 # conductoR 0.2.0
 
 ## New features

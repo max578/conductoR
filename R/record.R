@@ -1,0 +1,793 @@
+# record.R -- What a run returns to the composer: the dose-0 record, the
+# declared signals, the requested values and the check that guards them.
+
+# The typed error words a return may carry, one per kind of failure.
+.ERROR_TYPES <- c("typed_edge_violation", "missing_column", "type_mismatch",
+                  "missing_block", "too_few_units", "model_not_converged",
+                  "unidentifiable_parameter", "assumption_check_failed",
+                  "tool_error")
+
+.TRIGGER_COLS <- c("trigger_id", "node", "class", "signal_type", "statistic",
+                   "direction", "threshold", "action")
+.TRIGGER_DIRECTIONS <- c(">", ">=", "<", "<=", "==")
+.TRIGGER_ACTIONS <- c("branch", "return", "release")
+.TRIGGER_CLASSES <- c("anomaly", "candidate")
+
+.RECORD_COLS <- c("kind", "id", "emitter", "emits", "status", "reason",
+                  "abstained", "checks_passed", "checks_failed")
+
+# A word outside the alphabet is reported as a tool error, so a return never
+# carries free text.
+.as_error_type <- function(x) {
+  ifelse(x %in% .ERROR_TYPES, x, "tool_error")
+}
+
+# The alphabet word for an error condition: a class that is a word, a message
+# that starts with `<word>:`, the walker's own contract messages, or else
+# `tool_error`.
+.error_type_of <- function(e) {
+  hit <- intersect(class(e), .ERROR_TYPES)
+  if (length(hit)) return(hit[1])
+  msg <- conditionMessage(e)
+  pre <- regmatches(msg, regexpr("^[a-z_]+(?=:)", msg, perl = TRUE))
+  if (length(pre) && pre %in% .ERROR_TYPES) return(pre)
+  edge_pat <- paste0("TYPED-EDGE VIOLATION|expected an orchestra_manifest|",
+                     "did not return an orchestra_manifest|",
+                     "emitted '.*', promised")
+  if (grepl(edge_pat, msg)) return("typed_edge_violation")
+  "tool_error"
+}
+
+#' Perform a plan and keep a record when it fails
+#'
+#' Calls [conduct()] with the same arguments. When the run completes, the
+#' result is the run itself. When a node stops with an error, the result is
+#' a failed run: the nodes performed before the error, with their manifests,
+#' the node that failed and the typed error word for the failure. The
+#' failed run is accepted by [run_record()] and [run_return()], so a run that
+#' stops still returns a typed message to the composer.
+#'
+#' The error word is the condition's class when that class is one of the
+#' words listed in [run_record()]; else the word before a colon that starts
+#' the error message (`stop("missing_block: site S3 has no plots")`); else
+#' `typed_edge_violation` for a contract failure at an edge; else
+#' `tool_error`. The error message itself is kept in `failed$message` for
+#' the data holder and never enters a record or a return.
+#'
+#' @param plan An [oap_plan].
+#' @param data The data object every tool receives.
+#' @param ... Further arguments to [conduct()].
+#'
+#' @returns The run returned by [conduct()], or a failed run: a list with
+#'   `plan_id`, `plan_hash`, `input_hash`, `label`, `bus` and `provenance`
+#'   (the nodes performed before the error), `not_run` (the ids of the
+#'   nodes not reached) and `failed`, a list with `node` (the id of the node
+#'   that failed, or `"plan"` when the error came before any node ran),
+#'   `error_type` and `message`.
+#'
+#' @seealso [run_record()], [run_return()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' broken <- function(inputs, data, node) {
+#'   stop("missing_column: the table has no column 'yield'")
+#' }
+#' p <- oap_plan(id = "fails", nodes = list(
+#'   node("fit", broken, emits = "parameters")))
+#' run <- try_conduct(p, verbose = FALSE)
+#' run$failed$error_type
+#' format_record(run_record(run))
+#'
+#' @export
+try_conduct <- function(plan, data = list(), ...) {
+  stopifnot(S7::S7_inherits(plan, oap_plan))
+  state <- new.env(parent = emptyenv())
+  state$node <- "plan"
+  state$prov <- list()
+  state$bus <- list()
+  run <- tryCatch(
+    withCallingHandlers(
+      conduct(plan, data = data, ...),
+      error = function(e) .note_failure(state, sys.frames())),
+    error = function(e) e)
+  if (!inherits(run, "error")) return(run)
+
+  # The failed run ----------------------------------------------------------
+  args <- list(...)
+  done <- vapply(state$prov, function(p) p$node, character(1))
+  order <- tryCatch(plan_order(plan), error = function(e) .node_ids(plan))
+  list(plan_id = plan@id,
+       plan_hash = tryCatch(.plan_hash(plan),
+                            error = function(e) NA_character_),
+       input_hash = .object_hash(data),
+       label = args$label %||% NA_character_,
+       bus = state$bus, provenance = state$prov,
+       not_run = setdiff(order, c(done, state$node)),
+       failed = list(node = state$node, error_type = .error_type_of(run),
+                     message = conditionMessage(run)))
+}
+
+# Called where the error is signalled: the innermost frame holding an
+# `oap_node` names the node, and the walker's frame holds what ran before.
+.note_failure <- function(state, frames) {
+  node_id <- NA_character_
+  for (fr in rev(frames)) {
+    if (!exists("node", envir = fr, inherits = FALSE)) next
+    nd <- tryCatch(get("node", envir = fr, inherits = FALSE),
+                   error = function(e) NULL)
+    if (S7::S7_inherits(nd, oap_node)) {
+      node_id <- nd@id
+      break
+    }
+  }
+  for (fr in rev(frames)) {
+    if (exists("by_id", envir = fr, inherits = FALSE) &&
+        exists("prov", envir = fr, inherits = FALSE)) {
+      state$prov <- get("prov", envir = fr, inherits = FALSE)
+      state$bus <- get("bus", envir = fr, inherits = FALSE)
+      if (is.na(node_id) && exists("id", envir = fr, inherits = FALSE)) {
+        node_id <- get("id", envir = fr, inherits = FALSE)
+      }
+      break
+    }
+  }
+  state$node <- if (is.na(node_id)) "plan" else node_id
+  invisible()
+}
+
+# The nodes a run knows about, in execution order.
+.run_node_ids <- function(run) {
+  ids <- vapply(run$provenance, function(p) p$node, character(1))
+  c(ids, run$failed$node[!identical(run$failed$node, "plan")],
+    run$not_run %||% character(0))
+}
+
+#' Evaluate the declared signals of a run
+#'
+#' A signal is declared before the run, in a table with one row per
+#' trigger. Each trigger reads one statistic of one node, the metric
+#' `summary$metrics[[statistic]]` of the manifest the node emitted, and fires
+#' when the value compares with the threshold as its direction says.
+#'
+#' @param run A run returned by [conduct()] or [try_conduct()].
+#' @param triggers A data frame with columns `trigger_id`, `node`, `class`
+#'   (`"anomaly"` or `"candidate"`), `signal_type` (a word such as
+#'   `heterogeneity`, written with or without the prefix `signal:`),
+#'   `statistic`, `direction` (`>`, `>=`, `<`, `<=` or `==`), `threshold`,
+#'   `action` (`"return"`, `"branch"` or `"release"`) and, optionally,
+#'   `rehearsal_plant` (what was planted in rehearsal to show the trigger
+#'   fires). Columns may be character, as read from a CSV file.
+#'
+#' @returns The trigger table with `signal_type` carrying its `signal:`
+#'   prefix, `threshold` as a number, and three added columns: `value` (the
+#'   statistic, or `NA`), `fired` (`TRUE`, `FALSE`, or `NA` when the trigger
+#'   could not be evaluated) and `status` (`"evaluated"`, `"node_not_run"`
+#'   or `"statistic_missing"`).
+#'
+#' @section What stays with the data holder:
+#' `value` is the statistic itself, a data value. It stays in the object
+#' this function returns. [run_record()] and [run_return()] keep only
+#' whether each trigger fired.
+#'
+#' @seealso [run_record()], [run_return()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:spread",
+#'                    metrics = list(spread = 1.6))
+#' }
+#' run <- conduct(oap_plan(id = "sig", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects"))), verbose = FALSE)
+#' trig <- data.frame(trigger_id = "T_spread", node = "lens",
+#'                    class = "anomaly", signal_type = "lens_spread",
+#'                    statistic = "spread", direction = ">", threshold = 1.3,
+#'                    action = "return")
+#' evaluate_triggers(run, trig)[, c("trigger_id", "fired", "status")]
+#'
+#' @export
+evaluate_triggers <- function(run, triggers) {
+  stopifnot(is.list(run))
+  tab <- .check_triggers(triggers, .run_node_ids(run))
+  n <- nrow(tab)
+  value <- rep(NA_real_, n)
+  status <- character(n)
+
+  # Read each statistic from its node's manifest ----------------------------
+  for (i in seq_len(n)) {
+    m <- run$bus[[tab$node[i]]]
+    v <- if (is.null(m)) NULL else m@summary$metrics[[tab$statistic[i]]]
+    ok <- (is.numeric(v) || is.logical(v)) && length(v) == 1L && !is.na(v)
+    status[i] <- if (is.null(m)) "node_not_run"
+                 else if (!ok) "statistic_missing" else "evaluated"
+    if (ok) value[i] <- as.numeric(v)
+  }
+
+  # Compare with the declared thresholds ------------------------------------
+  fired <- rep(NA, n)
+  for (i in which(status == "evaluated")) {
+    fired[i] <- switch(tab$direction[i],
+      ">"  = value[i] >  tab$threshold[i],
+      ">=" = value[i] >= tab$threshold[i],
+      "<"  = value[i] <  tab$threshold[i],
+      "<=" = value[i] <= tab$threshold[i],
+      "==" = value[i] == tab$threshold[i])
+  }
+  tab$value <- value
+  tab$fired <- fired
+  tab$status <- status
+  class(tab) <- c("conductoR_triggers", "data.frame")
+  tab
+}
+
+# Refuses a trigger table with a missing column or a value outside the
+# allowed set, naming every problem at once.
+.check_triggers <- function(triggers, node_ids) {
+  if (!is.data.frame(triggers)) {
+    stop("triggers must be a data frame", call. = FALSE)
+  }
+  miss <- setdiff(.TRIGGER_COLS, names(triggers))
+  if (length(miss)) {
+    stop(sprintf("triggers is missing column(s): %s",
+                 paste(miss, collapse = ", ")), call. = FALSE)
+  }
+  tab <- as.data.frame(triggers, stringsAsFactors = FALSE)
+  class(tab) <- "data.frame"
+  for (col in setdiff(.TRIGGER_COLS, "threshold")) {
+    tab[[col]] <- as.character(tab[[col]])
+  }
+  if (!"rehearsal_plant" %in% names(tab)) tab$rehearsal_plant <- NA_character_
+  sig <- tab$signal_type
+  tab$signal_type <- ifelse(startsWith(sig, "signal:"), sig,
+                            paste0("signal:", sig))
+  tab$threshold <- suppressWarnings(as.numeric(as.character(tab$threshold)))
+
+  probs <- character(0)
+  bad <- function(ok, what) {
+    if (all(ok)) return(invisible())
+    rows <- paste(which(!ok), collapse = ", ")
+    probs <<- c(probs, sprintf("%s (row %s)", what, rows))
+  }
+  bad(grepl("^[A-Za-z][A-Za-z0-9_.]*$", tab$trigger_id),
+      "trigger_id must start with a letter and hold letters, digits, _ or .")
+  bad(!duplicated(tab$trigger_id), "trigger_id must be unique")
+  bad(tab$node %in% node_ids, "node is not a node of the run")
+  bad(tab$class %in% .TRIGGER_CLASSES, "class must be anomaly or candidate")
+  bad(grepl("^signal:[a-z][a-z0-9_]*$", tab$signal_type),
+      "signal_type must be a lower-case word")
+  bad(!is.na(tab$statistic) & nzchar(tab$statistic),
+      "statistic must be named")
+  bad(tab$direction %in% .TRIGGER_DIRECTIONS,
+      "direction must be one of >, >=, <, <=, ==")
+  bad(!is.na(tab$threshold), "threshold must be a number")
+  bad(tab$action %in% .TRIGGER_ACTIONS,
+      "action must be return, branch or release")
+  if (length(probs)) {
+    stop(paste(c("triggers are not valid:", paste0("  - ", probs)),
+               collapse = "\n"), call. = FALSE)
+  }
+  tab
+}
+
+# The issue words of one manifest: `summary$metrics$issue`, the abstention
+# reason when it is an alphabet word, and the same for each instance of a
+# `foreach` node.
+.manifest_issues <- function(m, nested = TRUE) {
+  if (!orchestraManifest::is_orchestra_manifest(m)) return(character(0))
+  s <- m@summary
+  v <- as.character(unlist(s$metrics$issue))
+  v <- v[!is.na(v) & nzchar(v)]
+  out <- .as_error_type(v)
+  r <- s$abstain_reason
+  if (!length(out) && isTRUE(s$abstained) && length(r) == 1L &&
+      !is.na(r) && r %in% .ERROR_TYPES) {
+    out <- r
+  }
+  if (nested && is.list(m@outputs)) {
+    for (mi in m@outputs) out <- c(out, .manifest_issues(mi, nested = FALSE))
+  }
+  unique(out)
+}
+
+# The declared checks of one node and which of them passed. A check is a
+# metric holding one TRUE or FALSE; a check that is absent or holds anything
+# else did not pass.
+.node_checks <- function(m, declared) {
+  metrics <- if (is.null(m)) list() else m@summary$metrics
+  own <- metrics$checks
+  vals <- list()
+  if (length(own) && !is.null(names(own))) vals <- as.list(own)
+  for (nm in declared) vals[[nm]] <- metrics[[nm]]
+  if (!length(vals)) return(c(NA_character_, NA_character_))
+  ok <- vapply(vals, function(v) is.logical(v) && length(v) == 1L &&
+                 isTRUE(v), logical(1))
+  for (nm in setdiff(declared, names(vals))) ok[nm] <- FALSE
+  join <- function(x) if (length(x)) paste(x, collapse = ";") else NA_character_
+  c(join(names(ok)[ok]), join(names(ok)[!ok]))
+}
+
+.record_row <- function(kind, id, emitter = NA_character_,
+                        emits = NA_character_, status, reason = NA_character_,
+                        abstained = NA, checks = c(NA_character_,
+                                                   NA_character_)) {
+  data.frame(kind = kind, id = id, emitter = emitter, emits = emits,
+             status = status, reason = reason, abstained = abstained,
+             checks_passed = checks[1], checks_failed = checks[2],
+             stringsAsFactors = FALSE)
+}
+
+#' The dose-0 record of a run
+#'
+#' The record is what a run says about itself without giving away a data
+#' value: one row per node with what it emitted and how it ended, and one
+#' row per declared trigger with whether it fired. It is built from
+#' [run_provenance()] and the manifests on the run's bus, and it keeps no
+#' number, no headline and no free text from either.
+#'
+#' @param run A run returned by [conduct()] or [try_conduct()].
+#' @param triggers A trigger table as described in [evaluate_triggers()],
+#'   evaluated or not, or `NULL`.
+#' @param checks A named list, keyed by node id, naming for each node the
+#'   metrics that are its checks; each such metric holds one `TRUE` (passed)
+#'   or `FALSE`. A node may also declare its own checks as a named logical
+#'   vector in `summary$metrics$checks`. `NULL` for none.
+#'
+#' @returns A data frame with columns `kind` (`"node"`, `"trigger"`, or
+#'   `"plan"` when a run failed before any node ran), `id`, `emitter`,
+#'   `emits` (for a trigger, its action), `status`, `reason`, `abstained`,
+#'   `checks_passed` and `checks_failed` (check names joined by `;`).
+#'
+#'   A node's `status` is `completed`, `refused` (its result abstained),
+#'   `skipped` (by the plan's own rules), `failed` (it stopped with an
+#'   error) or `not_run` (the run stopped before it). Its `reason` holds the
+#'   issue words it reported, joined by `;`, or `NA`.
+#'
+#'   A trigger's `status` is `fired`, `silent` or `not_evaluated`; its
+#'   `emitter` is the node it reads and its `reason` the signal type.
+#'
+#' @section The error words:
+#' A node's reason is one or more of `typed_edge_violation`,
+#' `missing_column`, `type_mismatch`, `missing_block`, `too_few_units`,
+#' `model_not_converged`, `unidentifiable_parameter`,
+#' `assumption_check_failed` and `tool_error`. A completed node reports an
+#' issue through `summary$metrics$issue`; a word outside this list is
+#' recorded as `tool_error`. A refused node with no issue reports its
+#' abstention reason when that reason is one of the words, and nothing
+#' otherwise: a refusal the plan provided for is not a failure. A node that
+#' stopped with an error reports the word [try_conduct()] gave it. A node
+#' whose declared trigger statistic is missing reports `tool_error`.
+#'
+#' @seealso [format_record()], [run_return()], [evaluate_triggers()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:lens",
+#'                    metrics = list(issue = "model_not_converged",
+#'                                   converged = FALSE))
+#' }
+#' run <- conduct(oap_plan(id = "rec", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects"))), verbose = FALSE)
+#' run_record(run, checks = list(lens = "converged"))
+#'
+#' @export
+run_record <- function(run, triggers = NULL, checks = NULL) {
+  stopifnot(is.list(run), is.list(run$provenance))
+  if (!is.null(checks)) {
+    stopifnot(is.list(checks), !is.null(names(checks)))
+  }
+  trig <- if (is.null(triggers)) NULL
+          else if (inherits(triggers, "conductoR_triggers")) triggers
+          else evaluate_triggers(run, triggers)
+  missing_stat <- if (is.null(trig)) character(0)
+                  else trig$node[trig$status == "statistic_missing"]
+
+  # One row per node performed ----------------------------------------------
+  rows <- lapply(run$provenance, function(p) {
+    m <- run$bus[[p$node]]
+    skipped <- identical(p$status, "skipped")
+    abstained <- isTRUE(as.logical(p$abstained))
+    issues <- if (skipped) character(0) else .manifest_issues(m)
+    if (p$node %in% missing_stat) issues <- unique(c(issues, "tool_error"))
+    .record_row(
+      "node", p$node,
+      emitter = if (skipped) NA_character_ else p$emitter,
+      emits = if (skipped) NA_character_ else p$emits,
+      status = if (skipped) "skipped" else if (abstained) "refused"
+               else "completed",
+      reason = if (length(issues)) paste(issues, collapse = ";")
+               else NA_character_,
+      abstained = if (skipped) NA else abstained,
+      checks = if (skipped) c(NA_character_, NA_character_)
+               else .node_checks(m, checks[[p$node]]))
+  })
+
+  # The failed node and the nodes not reached --------------------------------
+  if (!is.null(run$failed)) {
+    f <- run$failed
+    rows <- c(rows, list(.record_row(
+      if (identical(f$node, "plan")) "plan" else "node", f$node,
+      status = "failed", reason = f$error_type)))
+    rows <- c(rows, lapply(run$not_run %||% character(0), function(id) {
+      .record_row("node", id, status = "not_run")
+    }))
+  }
+
+  # One row per declared trigger ---------------------------------------------
+  if (!is.null(trig) && nrow(trig)) {
+    rows <- c(rows, lapply(seq_len(nrow(trig)), function(i) {
+      .record_row("trigger", trig$trigger_id[i], emitter = trig$node[i],
+                  emits = trig$action[i],
+                  status = if (is.na(trig$fired[i])) "not_evaluated"
+                           else if (trig$fired[i]) "fired" else "silent",
+                  reason = trig$signal_type[i])
+    }))
+  }
+  if (!length(rows)) return(.record_row("node", "x", status = "x")[0, ])
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
+#' The typed message lines of a record
+#'
+#' Turns a record into the message a composer reads: `stop` when every node
+#' completed, was refused or was skipped by the plan's own rules with no
+#' issue and no return trigger fired; otherwise one line `<node id>
+#' <error word>` per issue, then one line `<trigger id> signal:<type>` per
+#' fired trigger whose action is `return`.
+#'
+#' @param record A record from [run_record()].
+#'
+#' @returns A character vector of message lines.
+#'
+#' @seealso [run_record()], [run_return()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:lens")
+#' }
+#' run <- conduct(oap_plan(id = "ok", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects"))), verbose = FALSE)
+#' format_record(run_record(run))
+#'
+#' @export
+format_record <- function(record) {
+  stopifnot(is.data.frame(record), all(.RECORD_COLS %in% names(record)))
+  hit <- record[record$kind %in% c("node", "plan") & !is.na(record$reason), ,
+                drop = FALSE]
+  issue_lines <- unlist(lapply(seq_len(nrow(hit)), function(i) {
+    paste(hit$id[i], strsplit(hit$reason[i], ";", fixed = TRUE)[[1]])
+  }))
+  sig <- record[record$kind == "trigger" & record$emits == "return" &
+                  record$status == "fired", , drop = FALSE]
+  out <- c(issue_lines, paste(sig$id, sig$reason))
+  if (length(out)) out else "stop"
+}
+
+#' A floor on what a returned statistic may rest on
+#'
+#' Builds the check [run_return()] applies to every value it would return
+#' above dose 0. The check refuses a statistic computed on fewer than `k`
+#' units, or one in which a single unit holds more than the `dominance`
+#' share, when that information is present. A value that carries no unit
+#' count is refused.
+#'
+#' The unit count is read from the value's `n_units` attribute or, for a
+#' column of a node's `params` table, from that table's `n_units` column.
+#' The largest share of one unit is read the same way from
+#' `max_unit_share`. A column passes only when every row passes.
+#'
+#' This check is a floor, not a disclosure guarantee. It does not detect
+#' differencing between returns, a statistic that reveals a unit through
+#' its own value, or a combination of returns that does; the data holder
+#' remains responsible for what leaves.
+#'
+#' @param k The smallest number of units a returned statistic may rest on.
+#' @param dominance The largest share of the statistic one unit may hold,
+#'   between 0 and 1.
+#'
+#' @returns A function of one argument, the value, that returns
+#'   `NA_character_` when the value may be returned and otherwise the
+#'   reason it may not: `"no_unit_count"`, `"too_few_units"` or
+#'   `"dominant_unit"`.
+#'
+#' @seealso [run_return()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' check <- default_checker(k = 5)
+#' check(structure(0.42, n_units = 12L))
+#' check(structure(0.42, n_units = 3L))
+#' check(0.42)
+#'
+#' @export
+default_checker <- function(k = 5, dominance = 0.6) {
+  stopifnot(is.numeric(k), length(k) == 1L, !is.na(k), k >= 1,
+            is.numeric(dominance), length(dominance) == 1L,
+            !is.na(dominance), dominance > 0, dominance <= 1)
+  force(k)
+  force(dominance)
+  function(value) {
+    n <- attr(value, "n_units", exact = TRUE)
+    share <- attr(value, "max_unit_share", exact = TRUE)
+    if (is.data.frame(value)) {
+      if (is.null(n)) n <- value[["n_units"]]
+      if (is.null(share)) share <- value[["max_unit_share"]]
+    }
+    if (!is.numeric(n) || !length(n) || anyNA(n)) return("no_unit_count")
+    if (any(n < k)) return("too_few_units")
+    if (is.numeric(share) && any(share > dominance, na.rm = TRUE)) {
+      return("dominant_unit")
+    }
+    NA_character_
+  }
+}
+
+# A requested field: `metrics.<name>`, `params.<column>`, or a bare metric
+# name.
+.request_value <- function(m, field) {
+  if (is.null(m)) return(NULL)
+  if (startsWith(field, "params.")) {
+    col <- sub("^params\\.", "", field)
+    tab <- m@params
+    if (!col %in% names(tab)) return(NULL)
+    keep <- intersect(c(col, "n_units", "max_unit_share"), names(tab))
+    return(as.data.frame(tab, stringsAsFactors = FALSE)[, keep, drop = FALSE])
+  }
+  v <- m@summary$metrics[[sub("^metrics\\.", "", field)]]
+  if (is.null(v) || !is.atomic(v)) return(NULL)
+  v
+}
+
+.format_values <- function(v) {
+  x <- if (is.data.frame(v)) v[[1]] else v
+  vapply(x, function(e) {
+    if (is.numeric(e)) format(e, digits = 7) else as.character(e)
+  }, character(1), USE.NAMES = FALSE)
+}
+
+#' The message a run returns to the composer
+#'
+#' Builds what leaves the data holder after a run: the dose-0 record and its
+#' typed message lines, and, at dose 1 or above, the values the plan's
+#' requests name, each passed through `checker` first. A value the checker
+#' refuses, or one requested at a dose above the run's, is listed with the
+#' reason and never returned.
+#'
+#' @param run A run returned by [conduct()] or [try_conduct()].
+#' @param triggers A trigger table, as described in [evaluate_triggers()],
+#'   or `NULL`.
+#' @param dose The dose of this return: 0 for the record alone, 1 or above
+#'   for the record and the requested values up to that dose.
+#' @param requests A named list keyed by node id. Each element is a named
+#'   vector giving, for each requested field, the dose it needs, as in
+#'   `list(quorum = c(width_ratio = 1, "params.estimate" = 2))`. A field is
+#'   a metric of the node's `summary$metrics`, written bare or as
+#'   `metrics.<name>`, or a column of its `params` table, written
+#'   `params.<column>`.
+#' @param checker A function of one value that returns `NA_character_` when
+#'   the value may be returned, else the reason it may not. See
+#'   [default_checker()].
+#' @param series A short string naming the series of runs this return
+#'   belongs to, or `NULL`.
+#' @param round The round of the series, a whole number, or `NULL`.
+#' @param checks Passed to [run_record()].
+#'
+#' @returns An object of class `conductoR_return`: a list with `plan_id`,
+#'   `plan_hash`, `input_hash`, `series`, `round`, `dose`, `time`, `lines`
+#'   (the typed message), `record`, `values` (one row per returned value:
+#'   `node`, `field`, `dose`, `index`, `value` as text), `refused` (one row
+#'   per requested field not returned: `node`, `field`, `dose`, `reason`)
+#'   and `released` (`TRUE` when a value was returned). It holds no trigger
+#'   value, no error message and nothing else from the run. Printing it
+#'   shows the text [write_return()] writes.
+#'
+#' @section Reasons a value is not returned:
+#' `above_dose` (the request needs a higher dose than the return),
+#' `not_available` (the node did not run, or has no such field), and
+#' whatever reason the checker gives.
+#'
+#' @seealso [run_record()], [write_return()], [series_report()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:lens",
+#'                    metrics = list(slope = structure(0.31, n_units = 24L),
+#'                                   spread = structure(1.1, n_units = 3L)))
+#' }
+#' run <- conduct(oap_plan(id = "doses", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects"))), verbose = FALSE)
+#' ret <- run_return(run, dose = 1, series = "demo", round = 1,
+#'                   requests = list(lens = c(slope = 1, spread = 1)))
+#' ret$values
+#' ret$refused
+#'
+#' @export
+run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
+                       checker = default_checker(k = 5), series = NULL,
+                       round = NULL, checks = NULL) {
+  stopifnot(is.list(run),
+            is.numeric(dose), length(dose) == 1L, !is.na(dose), dose >= 0,
+            dose == round(dose), is.function(checker))
+  if (!is.null(series)) {
+    stopifnot(is.character(series), length(series) == 1L, nzchar(series))
+  }
+  if (!is.null(round)) {
+    stopifnot(is.numeric(round), length(round) == 1L, !is.na(round),
+              round >= 1, round == round(round))
+  }
+  record <- run_record(run, triggers = triggers, checks = checks)
+  reqs <- .check_requests(requests, .run_node_ids(run))
+
+  # Each requested field: withheld, refused or returned ----------------------
+  values <- list()
+  refused <- list()
+  for (i in seq_len(nrow(reqs))) {
+    r <- reqs[i, ]
+    why <- NA_character_
+    v <- NULL
+    if (r$dose > dose) {
+      why <- "above_dose"
+    } else {
+      v <- .request_value(run$bus[[r$node]], r$field)
+      why <- if (is.null(v)) "not_available" else checker(v)
+      if (!(is.character(why) && length(why) == 1L)) {
+        stop("checker must return NA_character_ or one reason string",
+             call. = FALSE)
+      }
+    }
+    if (is.na(why)) {
+      fv <- .format_values(v)
+      values[[length(values) + 1L]] <- data.frame(
+        node = r$node, field = r$field, dose = r$dose,
+        index = seq_along(fv), value = fv, stringsAsFactors = FALSE)
+    } else {
+      refused[[length(refused) + 1L]] <- data.frame(
+        node = r$node, field = r$field, dose = r$dose, reason = why,
+        stringsAsFactors = FALSE)
+    }
+  }
+  values <- if (length(values)) do.call(rbind, values)
+            else data.frame(node = character(0), field = character(0),
+                            dose = numeric(0), index = integer(0),
+                            value = character(0), stringsAsFactors = FALSE)
+  refused <- if (length(refused)) do.call(rbind, refused)
+             else data.frame(node = character(0), field = character(0),
+                             dose = numeric(0), reason = character(0),
+                             stringsAsFactors = FALSE)
+  structure(list(
+    plan_id = run$plan_id %||% NA_character_,
+    plan_hash = run$plan_hash %||% NA_character_,
+    input_hash = run$input_hash %||% NA_character_,
+    series = series %||% NA_character_,
+    round = if (is.null(round)) NA_integer_ else as.integer(round),
+    dose = as.integer(dose),
+    time = format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"),
+    lines = format_record(record), record = record,
+    values = values, refused = refused,
+    released = dose > 0 && nrow(values) > 0L),
+    class = "conductoR_return")
+}
+
+# The requests as a table: node, field, dose; refused when a node is not in
+# the run or a dose is not a whole number of at least 1.
+.check_requests <- function(requests, node_ids) {
+  empty <- data.frame(node = character(0), field = character(0),
+                      dose = numeric(0), stringsAsFactors = FALSE)
+  if (is.null(requests) || !length(requests)) return(empty)
+  if (!is.list(requests) || is.null(names(requests)) ||
+      any(!nzchar(names(requests)))) {
+    stop("requests must be a list named by node id", call. = FALSE)
+  }
+  unknown <- setdiff(names(requests), node_ids)
+  if (length(unknown)) {
+    stop(sprintf("requests name node(s) that are not in the run: %s",
+                 paste(unknown, collapse = ", ")), call. = FALSE)
+  }
+  rows <- lapply(names(requests), function(id) {
+    d <- requests[[id]]
+    if (!is.numeric(d) || is.null(names(d)) || any(!nzchar(names(d))) ||
+        anyNA(d) || any(d < 1) || any(d != round(d))) {
+      stop(sprintf(paste0("requests for '%s' must be a named vector of ",
+                          "doses, each a whole number of at least 1"), id),
+           call. = FALSE)
+    }
+    data.frame(node = id, field = names(d), dose = as.numeric(d),
+               stringsAsFactors = FALSE)
+  })
+  out <- do.call(rbind, rows)
+  rownames(out) <- NULL
+  out
+}
+
+.csv_lines <- function(tab) {
+  if (!nrow(tab)) return(paste(names(tab), collapse = ","))
+  utils::capture.output(utils::write.csv(tab, row.names = FALSE, na = ""))
+}
+
+#' @export
+format.conductoR_return <- function(x, ...) {
+  c("conductoR return",
+    sprintf("plan_id: %s", x$plan_id),
+    sprintf("plan_hash: %s", x$plan_hash),
+    sprintf("input_hash: %s", x$input_hash),
+    sprintf("series: %s", x$series),
+    sprintf("round: %s", x$round),
+    sprintf("dose: %d", x$dose),
+    sprintf("released: %s", x$released),
+    sprintf("time: %s", x$time),
+    "", "[message]", x$lines,
+    "", "[record]", .csv_lines(x$record),
+    "", "[values]", .csv_lines(x$values),
+    "", "[refused]", .csv_lines(x$refused))
+}
+
+#' @export
+print.conductoR_return <- function(x, ...) {
+  writeLines(format(x))
+  invisible(x)
+}
+
+#' Write a return to a file
+#'
+#' Writes the text of a return: a header with the plan id, `plan_hash`,
+#' `input_hash`, series, round, dose, whether a value was released and the
+#' time the return was built, then the sections `[message]`, `[record]`,
+#' `[values]` and `[refused]`, the last three as CSV.
+#'
+#' @section A series of runs:
+#' The rounds of one analysis share a folder, one sub-folder per round:
+#' `<series>/round_<k>/return.txt`. Give `path` as the series folder and the
+#' file goes to the sub-folder of the return's round; give a path ending in
+#' `.txt` to write that file instead. [series_report()] reads a series
+#' folder back. A return already written is never replaced: writing to an
+#' existing file is an error.
+#'
+#' @param ret A return from [run_return()].
+#' @param path A series folder, or a file path ending in `.txt`.
+#'
+#' @returns The path of the file written, invisibly.
+#'
+#' @seealso [run_return()], [series_report()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:lens")
+#' }
+#' run <- conduct(oap_plan(id = "w", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects"))), verbose = FALSE)
+#' dir <- file.path(tempdir(), "demo_series")
+#' f <- write_return(run_return(run, series = "demo", round = 1), dir)
+#' readLines(f)[1:9]
+#' series_report(dir)
+#'
+#' @export
+write_return <- function(ret, path) {
+  stopifnot(inherits(ret, "conductoR_return"), is.character(path),
+            length(path) == 1L, nzchar(path))
+  if (!grepl("\\.txt$", path)) {
+    if (is.na(ret$round)) {
+      stop("a return written into a series folder needs a round",
+           call. = FALSE)
+    }
+    path <- file.path(path, paste0("round_", ret$round), "return.txt")
+  }
+  if (file.exists(path)) {
+    stop(sprintf("a return already exists at %s; it is not replaced", path),
+         call. = FALSE)
+  }
+  dir.create(dirname(path), showWarnings = FALSE, recursive = TRUE)
+  writeLines(format(ret), path)
+  invisible(path)
+}

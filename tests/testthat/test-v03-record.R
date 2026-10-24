@@ -1,6 +1,5 @@
-# Version 0.3 record and provenance: the refusal reason kept by the holder,
-# the refusal and shape words, the exported plan hash and plan_validate() on
-# plan objects.
+# Version 0.3 record and provenance: refusal reasons and words, plan_hash()
+# and plan_validate() on plan objects.
 
 # Refusal reasons -------------------------------------------------------------
 

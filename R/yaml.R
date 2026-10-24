@@ -18,9 +18,7 @@
   c(out, .node_v02_fields(n))
 }
 
-# The plan as the list its YAML file holds. With `inline_ok`, a compute node
-# carrying an inline function is written as if it named a tool, for
-# checking only; such a list is never written to a file.
+# The plan as the list its YAML file holds; `inline_ok` is for checking only.
 .plan_spec <- function(plan, inline_ok = FALSE) {
   spec <- list(id = plan@id)
   if (.uses_v02(plan)) spec$plan_version <- "0.2"

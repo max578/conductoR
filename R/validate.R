@@ -954,14 +954,14 @@
 # Exported entry points
 # ---------------------------------------------------------------
 
-#' Check a plan file and list every problem
+#' Check a plan and list every problem
 #'
-#' Reads a plan written in YAML or JSON and checks it against the plan
-#' language: the fields and their types, the operators and inferential
-#' targets, the condition grammar, and the references between nodes. Every
-#' problem is reported, not only the first, each with the field, the node,
-#' the rule it breaks and how to fix it. A person or an AI model can repair a
-#' plan from this table and check it again.
+#' Reads a plan written in YAML or JSON, or takes a plan object, and checks
+#' it against the plan language: the fields and their types, the operators
+#' and inferential targets, the condition grammar, and the references between
+#' nodes. Every problem is reported, not only the first, each with the field,
+#' the node, the rule it breaks and how to fix it. A person or an AI model
+#' can repair a plan from this table and check it again.
 #'
 #' @details
 #' In a YAML plan, an unquoted `yes`, `no`, `on` or `off` is refused: write
@@ -969,8 +969,10 @@
 #' scientific notation (`1e3`) is refused with its plain form (`1000`). The
 #' structure checks follow the JSON Schema returned by [plan_schema()].
 #'
-#' @param x The path of a `.yaml`, `.yml` or `.json` plan file, or the plan's
-#'   text. Text that starts with an opening brace is read as JSON.
+#' @param x An [oap_plan], the path of a `.yaml`, `.yml` or `.json` plan
+#'   file, or the plan's text. Text that starts with an opening brace is read
+#'   as JSON. A plan object is checked as the plan it would write; a compute
+#'   node that carries an inline function is checked as if it named a tool.
 #'
 #' @returns A data frame with one row per problem and the columns `field`,
 #'   `node` (empty for a plan-level field), `rule` and `fix`. A valid plan
@@ -995,7 +997,14 @@
 #'
 #' @export
 plan_validate <- function(x) {
-  stopifnot(is.character(x), length(x) == 1L)
+  if (S7::S7_inherits(x, oap_plan)) {
+    return(.validate_spec(.plan_spec(x, inline_ok = TRUE))$problems)
+  }
+  if (!(is.character(x) && length(x) == 1L && !is.na(x))) {
+    stop(paste0("plan_validate() takes an oap_plan, a plan file path or ",
+                "the plan's YAML or JSON text; got an object of class '",
+                class(x)[1], "'"), call. = FALSE)
+  }
   spec <- tryCatch(
     if (.looks_json(x)) .read_json_spec(x) else .read_yaml_spec(x),
     error = function(e) e

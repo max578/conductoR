@@ -1,7 +1,8 @@
 # yaml.R -- A plan as a portable file.
 
-.node_to_list <- function(n) {
-  if (n@operator == "compute" && !nzchar(n@tool_ref)) {
+.node_to_list <- function(n, inline_ok = FALSE) {
+  inline <- n@operator == "compute" && !nzchar(n@tool_ref)
+  if (inline && !inline_ok) {
     stop(sprintf(paste0("compute node '%s' carries an inline closure and no ",
                         "tool_ref; register the tool and reference it by ",
                         "name so the plan is portable"), n@id), call. = FALSE)
@@ -13,7 +14,19 @@
               }),
               params = n@params)
   if (nzchar(n@tool_ref)) out$tool <- n@tool_ref
+  if (inline) out$tool <- n@id
   c(out, .node_v02_fields(n))
+}
+
+# The plan as the list its YAML file holds. With `inline_ok`, a compute node
+# carrying an inline function is written as if it named a tool, for
+# checking only; such a list is never written to a file.
+.plan_spec <- function(plan, inline_ok = FALSE) {
+  spec <- list(id = plan@id)
+  if (.uses_v02(plan)) spec$plan_version <- "0.2"
+  spec$meta <- plan@meta
+  spec$nodes <- lapply(plan@nodes, .node_to_list, inline_ok = inline_ok)
+  spec
 }
 
 # The v0.2 fields a node sets to something other than their defaults.
@@ -144,10 +157,7 @@
 #' @export
 plan_to_yaml <- function(plan, path = NULL) {
   stopifnot(S7::S7_inherits(plan, oap_plan))
-  spec <- list(id = plan@id)
-  if (.uses_v02(plan)) spec$plan_version <- "0.2"
-  spec$meta <- plan@meta
-  spec$nodes <- lapply(plan@nodes, .node_to_list)
+  spec <- .plan_spec(plan)
   txt <- paste0(paste(.yaml_lines(spec, 0L), collapse = "\n"), "\n")
   if (is.null(path)) return(txt)
   writeLines(txt, path, sep = "")

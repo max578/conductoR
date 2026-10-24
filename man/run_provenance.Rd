@@ -14,7 +14,10 @@ A data frame with one row per node in execution order and columns
 \code{node}, \code{operator}, \code{role}, \code{consumes} (upstream ids joined with \code{+}),
 \code{emits}, \code{emitter}, \code{run_id}, \code{data_hash}, \code{abstained}, \code{seconds},
 \code{status} (\code{ran}, \code{refused} or \code{skipped}) and \code{reason} (why a node was
-skipped, otherwise empty).
+skipped, the abstention reason of a node that refused, otherwise
+empty). The provenance stays with the data holder; a record or a
+return carries a refusal reason only when it is one of the words
+listed in \code{\link[=run_record]{run_record()}}.
 }
 \description{
 A run's provenance as a table

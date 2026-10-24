@@ -43,7 +43,12 @@ number, no headline and no free text from either.
 A node's reason is one or more of \code{typed_edge_violation},
 \code{missing_column}, \code{type_mismatch}, \code{missing_block}, \code{too_few_units},
 \code{model_not_converged}, \code{unidentifiable_parameter},
-\code{assumption_check_failed} and \code{tool_error}. A completed node reports an
+\code{assumption_check_failed} and \code{tool_error}; the refusal words
+\code{licence_unavailable} and \code{credential_unavailable} (the environment
+cannot reach a licence or read a credential the tool needs); and the
+shape words \code{no_interior_minimum}, \code{no_interior_optimum} and
+\code{no_response} (a fitted curve has no turning point inside the observed
+range, or no response at all). A completed node reports an
 issue through \code{summary$metrics$issue}; a word outside this list is
 recorded as \code{tool_error}. A refused node with no issue reports its
 abstention reason when that reason is one of the words, and nothing

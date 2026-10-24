@@ -2,13 +2,15 @@
 % Please edit documentation in R/validate.R
 \name{plan_validate}
 \alias{plan_validate}
-\title{Check a plan file and list every problem}
+\title{Check a plan and list every problem}
 \usage{
 plan_validate(x)
 }
 \arguments{
-\item{x}{The path of a \code{.yaml}, \code{.yml} or \code{.json} plan file, or the plan's
-text. Text that starts with an opening brace is read as JSON.}
+\item{x}{An \link{oap_plan}, the path of a \code{.yaml}, \code{.yml} or \code{.json} plan
+file, or the plan's text. Text that starts with an opening brace is read
+as JSON. A plan object is checked as the plan it would write; a compute
+node that carries an inline function is checked as if it named a tool.}
 }
 \value{
 A data frame with one row per problem and the columns \code{field},
@@ -16,12 +18,12 @@ A data frame with one row per problem and the columns \code{field},
 gives zero rows.
 }
 \description{
-Reads a plan written in YAML or JSON and checks it against the plan
-language: the fields and their types, the operators and inferential
-targets, the condition grammar, and the references between nodes. Every
-problem is reported, not only the first, each with the field, the node,
-the rule it breaks and how to fix it. A person or an AI model can repair a
-plan from this table and check it again.
+Reads a plan written in YAML or JSON, or takes a plan object, and checks
+it against the plan language: the fields and their types, the operators
+and inferential targets, the condition grammar, and the references between
+nodes. Every problem is reported, not only the first, each with the field,
+the node, the rule it breaks and how to fix it. A person or an AI model
+can repair a plan from this table and check it again.
 }
 \details{
 In a YAML plan, an unquoted \code{yes}, \code{no}, \code{on} or \code{off} is refused: write

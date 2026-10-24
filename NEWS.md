@@ -4,6 +4,21 @@
 * README carries status badges and lists related packages.
 * CI runs lintr (report-only) and test coverage.
 
+## Refusals, plan hash and plan checks
+
+* A node that refuses now leaves its abstention reason in the provenance
+  (`run_provenance()$reason`), which stays with the data holder. A record or
+  a return still carries the reason only when it is one of the error words.
+* The error words gain `licence_unavailable` and `credential_unavailable`,
+  for a tool that cannot reach a licence or read a credential, and
+  `no_interior_minimum`, `no_interior_optimum` and `no_response`, for a
+  fitted curve with no turning point inside the observed range or no
+  response at all.
+* `plan_hash()` gives the hash `conduct()` records, so a plan can be sealed
+  before it runs.
+* `plan_validate()` also takes a plan object, and says what it takes when
+  given anything else.
+
 ## What returns to the composer
 
 * `run_record()` gives the dose-0 record of a run: one row per node with its

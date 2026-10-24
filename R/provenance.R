@@ -8,7 +8,10 @@
 #'   `node`, `operator`, `role`, `consumes` (upstream ids joined with `+`),
 #'   `emits`, `emitter`, `run_id`, `data_hash`, `abstained`, `seconds`,
 #'   `status` (`ran`, `refused` or `skipped`) and `reason` (why a node was
-#'   skipped, otherwise empty).
+#'   skipped, the abstention reason of a node that refused, otherwise
+#'   empty). The provenance stays with the data holder; a record or a
+#'   return carries a refusal reason only when it is one of the words
+#'   listed in [run_record()].
 #'
 #' @section Files:
 #' When [conduct()] is given `out_dir`, it writes three files there:
@@ -188,4 +191,39 @@ same_plan <- function(run_a, run_b) {
                       run_b$input_hash %||% NA_character_),
        label      = c(run_a$label %||% NA_character_,
                       run_b$label %||% NA_character_))
+}
+
+#' The hash of a plan
+#'
+#' The SHA-256 that [conduct()] records as `plan_hash`: the plan's nodes,
+#' edges and parameters together with the code of every tool it references,
+#' so editing a tool changes the hash as surely as editing the plan. A data
+#' holder seals a plan by recording this hash before any run, and checks a
+#' run against the seal with `identical(run$plan_hash, seal)`.
+#'
+#' Every tool the plan references by name must be registered, because its
+#' code enters the hash.
+#'
+#' @param plan An [oap_plan].
+#'
+#' @returns A string, `"sha256:"` followed by 64 hexadecimal digits.
+#'
+#' @seealso [same_plan()], [conduct()].
+#'
+#' @author Max Moldovan
+#'
+#' @examples
+#' lens <- function(inputs, data, node) {
+#'   lens_to_manifest("effect", TRUE, "demo", "demo:lens")
+#' }
+#' p <- oap_plan(id = "sealed", nodes = list(
+#'   node("lens", lens, emits = "treatment_effects")))
+#' seal <- plan_hash(p)
+#' run <- conduct(p, verbose = FALSE)
+#' identical(run$plan_hash, seal)
+#'
+#' @export
+plan_hash <- function(plan) {
+  stopifnot(S7::S7_inherits(plan, oap_plan))
+  .plan_hash(plan)
 }

@@ -22,6 +22,14 @@
 
 .abstained <- function(m) isTRUE(m@summary$abstained)
 
+# The reason an abstaining manifest gives, as one string, for the holder's
+# provenance; "" when it gives none.
+.abstain_reason <- function(m) {
+  r <- m@summary$abstain_reason
+  if (length(r) != 1L || is.na(r)) return("")
+  as.character(r)
+}
+
 # Map from each node id to the ids of the nodes that consume it.
 .child_map <- function(plan) {
   ids <- .node_ids(plan)
@@ -321,7 +329,8 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
     record(id, n@operator, cn, out@inferential_target, out@emitter_package,
            out@run_id, out@data_hash, .abstained(out), dt,
            tag = if (.abstained(out)) "[ABSTAIN]" else "",
-           status = if (refused && is.null(n@foreach)) "refused" else "ran")
+           status = if (refused && is.null(n@foreach)) "refused" else "ran",
+           reason = if (.abstained(out)) .abstain_reason(out) else "")
     if (refused && n@on_refusal == "stop") {
       stopped_by <- id
       why <- sprintf("the run stopped: '%s' refused (on_refusal: stop)", id)

@@ -5,7 +5,9 @@
 .ERROR_TYPES <- c("typed_edge_violation", "missing_column", "type_mismatch",
                   "missing_block", "too_few_units", "model_not_converged",
                   "unidentifiable_parameter", "assumption_check_failed",
-                  "tool_error")
+                  "tool_error", "licence_unavailable",
+                  "credential_unavailable", "no_interior_minimum",
+                  "no_interior_optimum", "no_response")
 
 .TRIGGER_COLS <- c("trigger_id", "node", "class", "signal_type", "statistic",
                    "direction", "threshold", "action")
@@ -345,7 +347,12 @@ evaluate_triggers <- function(run, triggers) {
 #' A node's reason is one or more of `typed_edge_violation`,
 #' `missing_column`, `type_mismatch`, `missing_block`, `too_few_units`,
 #' `model_not_converged`, `unidentifiable_parameter`,
-#' `assumption_check_failed` and `tool_error`. A completed node reports an
+#' `assumption_check_failed` and `tool_error`; the refusal words
+#' `licence_unavailable` and `credential_unavailable` (the environment
+#' cannot reach a licence or read a credential the tool needs); and the
+#' shape words `no_interior_minimum`, `no_interior_optimum` and
+#' `no_response` (a fitted curve has no turning point inside the observed
+#' range, or no response at all). A completed node reports an
 #' issue through `summary$metrics$issue`; a word outside this list is
 #' recorded as `tool_error`. A refused node with no issue reports its
 #' abstention reason when that reason is one of the words, and nothing

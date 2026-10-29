@@ -44,7 +44,9 @@ number that could be a coordinate is refused.
 The unit count is read from the value's \code{n_units} attribute or, for a
 column of a node's \code{params} table, from that table's \code{n_units} column.
 The largest share of one unit is read the same way from
-\code{max_unit_share}. A column passes only when every row passes.
+\code{max_unit_share}. A column passes only when every row passes;
+\code{\link[=run_return]{run_return()}} calls the check on each row of a \code{params} field, so a
+row that fails is withheld alone.
 
 A number is coordinate-like when it lies inside one of \code{coord_bands} and
 has more than two decimals. The scan applies to a value whose \code{unit}

@@ -51,6 +51,12 @@
   the previous round of the series, given as a return or the path of a
   written one, is returned only when every row rests on at least `k_diff`
   units (`differencing`); a value missing in both rounds is unchanged.
+* `run_return()` checks a `params` field row by row: a row the checker
+  refuses, or a changed row resting on fewer than `k_diff` units, is
+  withheld alone and the other rows are returned. `refused` gains `n_rows`,
+  the number of rows withheld for each reason, without naming them; it is
+  `NA` for a field refused whole. Before, one failing row withheld the
+  whole column. A metric is still checked whole.
 * Returned numbers are rounded to `digits` significant figures, or to the
   `digits` a request declares, and a `|` inside a returned value is
   escaped. `plan_returns()` reads every declared field of a plan's returns

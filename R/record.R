@@ -498,7 +498,9 @@ format_record <- function(record) {
 #' The unit count is read from the value's `n_units` attribute or, for a
 #' column of a node's `params` table, from that table's `n_units` column.
 #' The largest share of one unit is read the same way from
-#' `max_unit_share`. A column passes only when every row passes.
+#' `max_unit_share`. A column passes only when every row passes;
+#' [run_return()] calls the check on each row of a `params` field, so a
+#' row that fails is withheld alone.
 #'
 #' A number is coordinate-like when it lies inside one of `coord_bands` and
 #' has more than two decimals. The scan applies to a value whose `unit`
@@ -694,6 +696,16 @@ default_checker <- function(k = 5, dominance = 0.6,
        "written by write_return()", call. = FALSE)
 }
 
+# The checker's verdict on one value: NA_character_ or one reason.
+.check_one <- function(checker, v) {
+  why <- checker(v)
+  if (!(is.character(why) && length(why) == 1L)) {
+    stop("checker must return NA_character_ or one reason string",
+         call. = FALSE)
+  }
+  why
+}
+
 # Missing in both rounds is unchanged; a written return keeps NA as an
 # empty field, so "" and "NA" read back as missing.
 .same_text <- function(a, b) {
@@ -742,8 +754,10 @@ default_checker <- function(k = 5, dominance = 0.6,
 #'   `plan_hash`, `input_hash`, `series`, `round`, `dose`, `time`, `lines`
 #'   (the typed message), `record`, `values` (one row per returned value:
 #'   `node`, `field`, `dose`, `index`, `value` as text), `refused` (one row
-#'   per requested field not returned: `node`, `field`, `dose`, `reason`)
-#'   and `released` (`TRUE` when a value was returned). It holds no trigger
+#'   per requested field not returned, or per reason rows of a `params`
+#'   field were withheld: `node`, `field`, `dose`, `reason`, and `n_rows`,
+#'   the number of rows withheld for that reason, `NA` for a field refused
+#'   whole) and `released` (`TRUE` when a value was returned). It holds no trigger
 #'   value, no error message and nothing else from the run. Printing it
 #'   shows the text [write_return()] writes.
 #'
@@ -752,6 +766,16 @@ default_checker <- function(k = 5, dominance = 0.6,
 #' `not_available` (the node did not run, has no such field, or no row
 #' passes the row filter), `differencing` (see below), and whatever reason
 #' the checker gives.
+#'
+#' @section Rows of a params field:
+#' A `params` field is checked row by row: the checker sees each row with
+#' its own unit count, a row it refuses is withheld, and the rows that pass
+#' are returned with their row number as `index`. `refused` counts the
+#' withheld rows by reason in `n_rows` and names none of them, so the
+#' composer learns how many rows are missing and why, and not which. A
+#' metric is checked whole. Withholding a row does not stop it being
+#' solved from a released total and its released siblings: pass the
+#' release through [suppress_return()] with the partitions it carries.
 #'
 #' @section Declared fields:
 #' A request in the data-frame form, as [plan_returns()] reads it from the
@@ -775,7 +799,10 @@ default_checker <- function(k = 5, dominance = 0.6,
 #' `k_diff` units; otherwise it is refused as `differencing`, since the
 #' change between two rounds can reveal the few units behind it. A value
 #' missing in both rounds is unchanged. A field the previous round did not
-#' return is not compared.
+#' return is not compared. The rows of a `params` field are compared one by
+#' one, by `index`: a changed row resting on fewer than `k_diff` units is
+#' withheld as `differencing` and the other rows are returned, and a row
+#' the previous round did not return is not compared.
 #'
 #' @seealso [run_record()], [write_return()], [series_report()],
 #'   [plan_returns()], [default_checker()].
@@ -828,11 +855,45 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     } else {
       v <- .request_value(run$bus[[r$node]], r$field, r$unit,
                           r$n_units_field)
-      why <- if (is.null(v)) "not_available" else checker(v)
-      if (!(is.character(why) && length(why) == 1L)) {
-        stop("checker must return NA_character_ or one reason string",
-             call. = FALSE)
+      if (is.null(v) || (is.data.frame(v) && !nrow(v))) {
+        why <- "not_available"
+      } else if (!is.data.frame(v)) {
+        why <- .check_one(checker, v)
       }
+    }
+    # A params column: each row is checked, and differenced, on its own
+    if (is.na(why) && is.data.frame(v)) {
+      fv <- .format_values(v, if (is.na(r$digits)) digits else r$digits)
+      unit_attr <- attr(v, "unit", exact = TRUE)
+      row_why <- vapply(seq_len(nrow(v)), function(j) {
+        vj <- v[j, , drop = FALSE]
+        attr(vj, "unit") <- unit_attr
+        .check_one(checker, vj)
+      }, character(1))
+      before <- if (is.null(prev)) NULL
+                else prev[prev$node == r$node & prev$field == r$field, ,
+                          drop = FALSE]
+      if (!is.null(before) && nrow(before)) {
+        old <- before$value[match(seq_along(fv), as.integer(before$index))]
+        n <- rep_len(.value_units(v), length(fv))
+        thin <- is.na(row_why) & !is.na(old) & !.same_text(fv, old) &
+          (is.na(n) | n < k_diff)
+        row_why[thin] <- "differencing"
+      }
+      keep <- is.na(row_why)
+      if (any(keep)) {
+        values[[length(values) + 1L]] <- data.frame(
+          node = r$node, field = r$field, dose = r$dose,
+          index = which(keep), value = fv[keep], stringsAsFactors = FALSE)
+      }
+      if (any(!keep)) {
+        n_why <- table(row_why[!keep])
+        refused[[length(refused) + 1L]] <- data.frame(
+          node = r$node, field = r$field, dose = r$dose,
+          reason = names(n_why), n_rows = as.integer(n_why),
+          stringsAsFactors = FALSE)
+      }
+      next
     }
     if (is.na(why)) {
       fv <- .format_values(v, if (is.na(r$digits)) digits else r$digits)
@@ -853,7 +914,7 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     } else {
       refused[[length(refused) + 1L]] <- data.frame(
         node = r$node, field = r$field, dose = r$dose, reason = why,
-        stringsAsFactors = FALSE)
+        n_rows = NA_integer_, stringsAsFactors = FALSE)
     }
   }
   values <- if (length(values)) do.call(rbind, values)
@@ -863,7 +924,7 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
   refused <- if (length(refused)) do.call(rbind, refused)
              else data.frame(node = character(0), field = character(0),
                              dose = numeric(0), reason = character(0),
-                             stringsAsFactors = FALSE)
+                             n_rows = integer(0), stringsAsFactors = FALSE)
   structure(list(
     plan_id = run$plan_id %||% NA_character_,
     plan_hash = run$plan_hash %||% NA_character_,

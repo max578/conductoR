@@ -121,8 +121,53 @@ test_that("the unit count is read from the declared field and nowhere else", {
   # a declared count that is missing is no count, whatever else the value
   # carries
   expect_identical(ref[["gap"]], "no_unit_count")
-  # n_trials 4, 3, 7, 9: one row under 5, so the column is refused
+  # n_trials 4, 3, 7, 9: two rows under 5 are withheld, the other two return
   expect_identical(ref[["params.estimate"]], "too_few_units")
+  expect_identical(ret$refused$n_rows[ret$refused$field == "params.estimate"],
+                   2L)
+  expect_identical(ret$values$index[ret$values$field == "params.estimate"],
+                   c(3L, 4L))
+})
+
+test_that("a params row that fails is withheld alone and counted", {
+  tab <- trial_tab
+  tab$estimate[1] <- 123.8493
+  run <- conduct(checks_plan(list(), tab = tab), verbose = FALSE)
+  ret <- run_return(run, dose = 1,
+                    requests = list(fit = c("params.estimate" = 1)),
+                    checker = default_checker(k = 5, coord_bands = bands_au))
+  expect_identical(ret$values$index, 2:4)
+  expect_identical(ret$values$value, c("0.43", "2.71", "0.98"))
+  expect_identical(ret$refused$reason, "coordinate_like")
+  expect_identical(ret$refused$n_rows, 1L)
+  # two reasons in one column are counted apart
+  tab$n_units[4] <- 2L
+  run <- conduct(checks_plan(list(), tab = tab), verbose = FALSE)
+  ret <- run_return(run, dose = 1,
+                    requests = list(fit = c("params.estimate" = 1)),
+                    checker = default_checker(k = 5, coord_bands = bands_au))
+  expect_identical(ret$values$index, 2:3)
+  expect_identical(stats::setNames(ret$refused$n_rows, ret$refused$reason),
+                   c(coordinate_like = 1L, too_few_units = 1L))
+  # every row withheld: nothing returned, every row counted
+  ret <- run_return(run, dose = 1,
+                    requests = list(fit = c("params.estimate" = 1)),
+                    checker = default_checker(k = 50))
+  expect_identical(nrow(ret$values), 0L)
+  expect_identical(ret$refused$n_rows, 4L)
+  expect_false(ret$released)
+  # a field refused whole carries no row count
+  ret <- run_return(run, dose = 1, requests = list(fit = c(absent = 1)))
+  expect_identical(ret$refused$reason, "not_available")
+  expect_identical(ret$refused$n_rows, NA_integer_)
+})
+
+test_that("a params table with no rows is not available", {
+  run <- conduct(checks_plan(list(), tab = trial_tab[0, ]), verbose = FALSE)
+  ret <- run_return(run, dose = 1,
+                    requests = list(fit = c("params.estimate" = 1)))
+  expect_identical(ret$refused$reason, "not_available")
+  expect_identical(nrow(ret$values), 0L)
 })
 
 test_that("a row filter returns only the rows of one kind", {
@@ -253,8 +298,8 @@ test_that("differencing reads the previous round from its written file", {
                    round = 2, previous = f1, k_diff = 10,
                    requests = list(fit = c(slope = 1)))
   expect_identical(r2$refused$reason, "differencing")
-  # an unchanged row of a column passes; one changed row on few units
-  # refuses the whole column
+  # an unchanged row of a column passes; a changed row on few units is
+  # withheld alone
   tab2 <- trial_tab
   tab2$estimate[2] <- 0.47
   ra <- run_return(conduct(checks_plan(list()), verbose = FALSE), dose = 1,
@@ -263,6 +308,8 @@ test_that("differencing reads the previous round from its written file", {
                    dose = 1, round = 2, previous = ra, k_diff = 10,
                    requests = list(fit = c("params.estimate" = 1)))
   expect_identical(rb$refused$reason, "differencing")
+  expect_identical(rb$refused$n_rows, 1L)
+  expect_identical(rb$values$index, c(1L, 3L, 4L))
   rc <- run_return(conduct(checks_plan(list(), tab = tab2), verbose = FALSE),
                    dose = 1, round = 2, previous = ra, k_diff = 9,
                    requests = list(fit = c("params.estimate" = 1)))

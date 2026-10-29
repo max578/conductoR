@@ -62,8 +62,10 @@ An object of class \code{conductoR_return}: a list with \code{plan_id},
 \code{plan_hash}, \code{input_hash}, \code{series}, \code{round}, \code{dose}, \code{time}, \code{lines}
 (the typed message), \code{record}, \code{values} (one row per returned value:
 \code{node}, \code{field}, \code{dose}, \code{index}, \code{value} as text), \code{refused} (one row
-per requested field not returned: \code{node}, \code{field}, \code{dose}, \code{reason})
-and \code{released} (\code{TRUE} when a value was returned). It holds no trigger
+per requested field not returned, or per reason rows of a \code{params}
+field were withheld: \code{node}, \code{field}, \code{dose}, \code{reason}, and \code{n_rows},
+the number of rows withheld for that reason, \code{NA} for a field refused
+whole) and \code{released} (\code{TRUE} when a value was returned). It holds no trigger
 value, no error message and nothing else from the run. Printing it
 shows the text \code{\link[=write_return]{write_return()}} writes.
 }
@@ -80,6 +82,18 @@ reason and never returned.
 \code{not_available} (the node did not run, has no such field, or no row
 passes the row filter), \code{differencing} (see below), and whatever reason
 the checker gives.
+}
+
+\section{Rows of a params field}{
+
+A \code{params} field is checked row by row: the checker sees each row with
+its own unit count, a row it refuses is withheld, and the rows that pass
+are returned with their row number as \code{index}. \code{refused} counts the
+withheld rows by reason in \code{n_rows} and names none of them, so the
+composer learns how many rows are missing and why, and not which. A
+metric is checked whole. Withholding a row does not stop it being
+solved from a released total and its released siblings: pass the
+release through \code{\link[=suppress_return]{suppress_return()}} with the partitions it carries.
 }
 
 \section{Declared fields}{
@@ -107,7 +121,10 @@ When it changed, it is returned only if every row rests on at least
 \code{k_diff} units; otherwise it is refused as \code{differencing}, since the
 change between two rounds can reveal the few units behind it. A value
 missing in both rounds is unchanged. A field the previous round did not
-return is not compared.
+return is not compared. The rows of a \code{params} field are compared one by
+one, by \code{index}: a changed row resting on fewer than \code{k_diff} units is
+withheld as \code{differencing} and the other rows are returned, and a row
+the previous round did not return is not compared.
 }
 
 \examples{

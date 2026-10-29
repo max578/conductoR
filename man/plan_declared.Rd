@@ -3,11 +3,14 @@
 \name{plan_declared}
 \alias{plan_declared}
 \alias{plan_requests}
+\alias{plan_returns}
 \alias{plan_triggers}
 \alias{plan_hypotheses}
 \title{The values, triggers and hypotheses a plan declares}
 \usage{
 plan_requests(plan)
+
+plan_returns(plan)
 
 plan_triggers(plan)
 
@@ -19,6 +22,11 @@ plan_hypotheses(plan)
 \value{
 \code{plan_requests()}: a list named by node id, each element a named
 vector of the dose each requested field needs, as \code{run_return(requests =)} takes it; an empty list when nothing is requested.
+\code{plan_returns()}: the same requests with what each declares besides
+its dose, a data frame with one row per requested field and the
+columns \code{node}, \code{field}, \code{dose}, \code{unit}, \code{n_units_field} and \code{digits}
+(missing where not declared), which \code{run_return(requests =)} also
+takes.
 \code{plan_triggers()}: a trigger table as \code{\link[=evaluate_triggers]{evaluate_triggers()}} takes it,
 with the node column filled in. \code{plan_hypotheses()}: a data frame with
 one row per hypothesis and the columns \code{node}, \code{hypothesis_id},
@@ -46,6 +54,7 @@ p <- oap_plan(id = "declared", nodes = list(
                                firing_plant = "slope of 0.3 planted",
                                silent_plant = "flat response planted"))))
 plan_requests(p)
+plan_returns(p)
 plan_triggers(p)
 plan_hypotheses(p)
 

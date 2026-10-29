@@ -33,6 +33,29 @@
   version 0.2 schema stays installed. Every new field is optional: a 0.1 or
   0.2 plan reads, runs and hashes exactly as before.
 
+## Return checks
+
+* A request may declare the unit of its field. `default_checker()` gains a
+  coordinate scan (`coord_bands`): a number inside a declared band with
+  more than two decimals is refused as `coordinate_like`, unless the field
+  is declared in a unit that is not a coordinate, so a rate in kg N/ha or a
+  negative price difference is no longer withheld as a place.
+  `default_checker()` also gains `forbidden`, strings no returned value may
+  contain (`forbidden_string`).
+* A `params` field may carry a row filter,
+  `params.estimate[kind=state]`, so rows of two kinds in one table are
+  requested apart and each is checked on its own unit counts.
+* A declared `n_units_field` is now the only source of a value's unit
+  count; a declared field that is missing is no count.
+* `run_return()` gains `previous` and `k_diff`: a value that changed since
+  the previous round of the series, given as a return or the path of a
+  written one, is returned only when every row rests on at least `k_diff`
+  units (`differencing`); a value missing in both rounds is unchanged.
+* Returned numbers are rounded to `digits` significant figures, or to the
+  `digits` a request declares, and a `|` inside a returned value is
+  escaped. `plan_returns()` reads every declared field of a plan's returns
+  into the table `run_return(requests =)` takes.
+
 ## Refusals, plan hash and plan checks
 
 * A node that refuses now leaves its abstention reason in the provenance

@@ -193,7 +193,7 @@ oap_plan <- S7::new_class(
 #' @param tool A closure `function(inputs, data, node)` returning an
 #'   [orchestraManifest::orchestra_manifest], or a string reference in one of
 #'   the forms [resolve_tool()] accepts.
-#' @param returns As in [oap_node], or a named vector of doses such as
+#' @param returns As in [oap_node], or a named vector of doses:
 #'   `c(slope = 1, "params.estimate" = 2)`.
 #' @param triggers,hypotheses As in [oap_node], or a data frame with one row
 #'   per record.

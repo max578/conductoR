@@ -491,26 +491,46 @@ format_record <- function(record) {
 #' above dose 0. The check refuses a statistic computed on fewer than `k`
 #' units, or one in which a single unit holds more than the `dominance`
 #' share, when that information is present. A value that carries no unit
-#' count is refused.
+#' count is refused. Two scans follow: a value whose text holds one of the
+#' `forbidden` strings is refused, and, when `coord_bands` is given, a
+#' number that could be a coordinate is refused.
 #'
 #' The unit count is read from the value's `n_units` attribute or, for a
 #' column of a node's `params` table, from that table's `n_units` column.
 #' The largest share of one unit is read the same way from
 #' `max_unit_share`. A column passes only when every row passes.
 #'
-#' This check is a floor, not a disclosure guarantee. It does not detect
-#' differencing between returns, a statistic that reveals a unit through
-#' its own value, or a combination of returns that does; the data holder
-#' remains responsible for what leaves.
+#' A number is coordinate-like when it lies inside one of `coord_bands` and
+#' has more than two decimals. The scan applies to a value whose `unit`
+#' attribute is missing, or names a coordinate (`coordinate`, `degrees`,
+#' `decimal_degrees`, `latitude`, `longitude`, in any case). A value
+#' declared in any other unit is not scanned: a rate in kg N/ha or a price
+#' in $/ha can fall inside a band without being a place. [run_return()]
+#' sets `unit` from the unit a request declares. There is no default band:
+#' a band covering every latitude and longitude would refuse almost every
+#' estimate, so the holder names the bands of the region the data come
+#' from.
+#'
+#' This check is a floor, not a disclosure guarantee. It does not detect a
+#' statistic that reveals a unit through its own value, or a combination of
+#' returns that does; differencing between rounds is checked by
+#' [run_return()] against the previous round. The data holder remains
+#' responsible for what leaves.
 #'
 #' @param k The smallest number of units a returned statistic may rest on.
 #' @param dominance The largest share of the statistic one unit may hold,
 #'   between 0 and 1.
+#' @param forbidden Strings no returned value may contain, matched as
+#'   written: the names of places and trials in the holder's table.
+#' @param coord_bands `NULL` for no coordinate scan, or a list of bands,
+#'   each a numeric vector of a lower and an upper bound.
+#'   `list(c(-45, -10), c(110, 155))` covers the latitudes and longitudes
+#'   of south-eastern Australia.
 #'
 #' @returns A function of one argument, the value, that returns
 #'   `NA_character_` when the value may be returned and otherwise the
-#'   reason it may not: `"no_unit_count"`, `"too_few_units"` or
-#'   `"dominant_unit"`.
+#'   reason it may not: `"no_unit_count"`, `"too_few_units"`,
+#'   `"dominant_unit"`, `"forbidden_string"` or `"coordinate_like"`.
 #'
 #' @seealso [run_return()].
 #'
@@ -522,13 +542,30 @@ format_record <- function(record) {
 #' check(structure(0.42, n_units = 3L))
 #' check(0.42)
 #'
+#' scan <- default_checker(forbidden = "Roseworthy",
+#'                         coord_bands = list(c(-45, -10), c(110, 155)))
+#' scan(structure(138.6042, n_units = 12L))
+#' scan(structure(138.6042, n_units = 12L, unit = "kg N/ha"))
+#' scan(structure("near Roseworthy", n_units = 12L))
+#'
 #' @export
-default_checker <- function(k = 5, dominance = 0.6) {
+default_checker <- function(k = 5, dominance = 0.6,
+                            forbidden = character(0), coord_bands = NULL) {
   stopifnot(is.numeric(k), length(k) == 1L, !is.na(k), k >= 1,
             is.numeric(dominance), length(dominance) == 1L,
-            !is.na(dominance), dominance > 0, dominance <= 1)
+            !is.na(dominance), dominance > 0, dominance <= 1,
+            is.character(forbidden), !anyNA(forbidden),
+            all(nzchar(forbidden)))
+  if (!is.null(coord_bands)) {
+    stopifnot(is.list(coord_bands), length(coord_bands) >= 1L,
+              all(vapply(coord_bands, function(b) {
+                is.numeric(b) && length(b) == 2L && !anyNA(b) && b[1] < b[2]
+              }, logical(1))))
+  }
   force(k)
   force(dominance)
+  force(forbidden)
+  force(coord_bands)
   function(value) {
     n <- attr(value, "n_units", exact = TRUE)
     share <- attr(value, "max_unit_share", exact = TRUE)
@@ -541,31 +578,128 @@ default_checker <- function(k = 5, dominance = 0.6) {
     if (is.numeric(share) && any(share > dominance, na.rm = TRUE)) {
       return("dominant_unit")
     }
+    if (length(forbidden)) {
+      txt <- if (is.data.frame(value)) unlist(lapply(value, as.character))
+             else as.character(value)
+      txt <- txt[!is.na(txt)]
+      if (any(vapply(forbidden, function(f) any(grepl(f, txt, fixed = TRUE)),
+                     logical(1)))) {
+        return("forbidden_string")
+      }
+    }
+    unit <- attr(value, "unit", exact = TRUE)
+    if (!is.null(coord_bands) && .coord_unit(unit)) {
+      x <- if (is.data.frame(value)) value[[1]] else value
+      if (is.numeric(x) && any(.coord_like(x, coord_bands))) {
+        return("coordinate_like")
+      }
+    }
     NA_character_
   }
 }
 
-# A requested field: `metrics.<name>`, `params.<column>`, or a bare metric
-# name.
-.request_value <- function(m, field) {
+# A value is scanned for coordinates when its unit is undeclared or names a
+# coordinate.
+.coord_unit <- function(unit) {
+  if (is.null(unit) || length(unit) != 1L || is.na(unit)) return(TRUE)
+  tolower(unit) %in% c("coordinate", "degrees", "decimal_degrees",
+                       "latitude", "longitude")
+}
+
+# Inside a band, with more than two decimals.
+.coord_like <- function(x, bands) {
+  x <- as.numeric(x)
+  ok <- !is.na(x)
+  inside <- Reduce(`|`, lapply(bands, function(b) x > b[1] & x < b[2]))
+  ok & inside & abs(x - round(x, 2)) > 1e-9
+}
+
+# A requested field: `metrics.<name>`, `params.<column>`, a bare metric
+# name, or `params.<column>[<key>=<value>,...]` for the rows of one kind.
+# The unit count comes from `n_units_field` when one is declared, and only
+# from there; the declared unit travels as the `unit` attribute.
+.request_value <- function(m, field, unit = NA_character_,
+                           n_units_field = NA_character_) {
   if (is.null(m)) return(NULL)
-  if (startsWith(field, "params.")) {
-    col <- sub("^params\\.", "", field)
-    tab <- m@params
+  pf <- .parse_request_field(field)
+  has_nf <- !is.na(n_units_field)
+  if (startsWith(pf$field, "params.")) {
+    col <- sub("^params\\.", "", pf$field)
+    tab <- as.data.frame(m@params, stringsAsFactors = FALSE)
     if (!col %in% names(tab)) return(NULL)
-    keep <- intersect(c(col, "n_units", "max_unit_share"), names(tab))
-    return(as.data.frame(tab, stringsAsFactors = FALSE)[, keep, drop = FALSE])
+    if (!is.null(pf$key)) {
+      if (!pf$key %in% names(tab)) return(NULL)
+      tab <- tab[as.character(tab[[pf$key]]) %in% pf$values, , drop = FALSE]
+      if (!nrow(tab)) return(NULL)
+    }
+    v <- tab[, col, drop = FALSE]
+    if (has_nf) {
+      if (n_units_field %in% names(tab)) v$n_units <- tab[[n_units_field]]
+    } else if ("n_units" %in% names(tab)) {
+      v$n_units <- tab$n_units
+    }
+    if ("max_unit_share" %in% names(tab)) {
+      v$max_unit_share <- tab$max_unit_share
+    }
+    rownames(v) <- NULL
+  } else {
+    metrics <- m@summary$metrics
+    v <- metrics[[sub("^metrics\\.", "", pf$field)]]
+    if (is.null(v) || !is.atomic(v)) return(NULL)
+    if (has_nf) {
+      n <- metrics[[n_units_field]]
+      attr(v, "n_units") <- if (is.numeric(n) && length(n) == 1L) n
+                            else NA_real_
+    }
   }
-  v <- m@summary$metrics[[sub("^metrics\\.", "", field)]]
-  if (is.null(v) || !is.atomic(v)) return(NULL)
+  if (!is.na(unit)) attr(v, "unit") <- unit
   v
 }
 
-.format_values <- function(v) {
+# The text of a returned value: numbers to `digits` significant figures,
+# and `|` escaped so the text can sit in a Markdown table.
+.format_values <- function(v, digits = 7L) {
   x <- if (is.data.frame(v)) v[[1]] else v
-  vapply(x, function(e) {
-    if (is.numeric(e)) format(e, digits = 7) else as.character(e)
+  out <- vapply(x, function(e) {
+    if (is.numeric(e)) format(signif(e, digits), digits = digits)
+    else as.character(e)
   }, character(1), USE.NAMES = FALSE)
+  gsub("|", "\\|", out, fixed = TRUE)
+}
+
+# The unit count of each row of a value, for the differencing rule.
+.value_units <- function(v) {
+  n <- attr(v, "n_units", exact = TRUE)
+  if (is.null(n) && is.data.frame(v)) n <- v[["n_units"]]
+  if (!is.numeric(n) || !length(n)) n <- NA_real_
+  n
+}
+
+# The values of the previous round, from a return or its written file.
+.previous_values <- function(previous) {
+  if (is.null(previous)) return(NULL)
+  if (inherits(previous, "conductoR_return")) return(previous$values)
+  if (is.character(previous) && length(previous) == 1L &&
+      file.exists(previous)) {
+    vals <- .read_return_section(previous, "values")
+    if (length(vals) < 2L) {
+      return(data.frame(node = character(0), field = character(0),
+                        index = integer(0), value = character(0),
+                        stringsAsFactors = FALSE))
+    }
+    return(utils::read.csv(text = vals, colClasses = "character",
+                           na.strings = character(0)))
+  }
+  stop("previous must be a return from run_return() or the path of one ",
+       "written by write_return()", call. = FALSE)
+}
+
+# Missing in both rounds is unchanged; a written return keeps NA as an
+# empty field, so "" and "NA" read back as missing.
+.same_text <- function(a, b) {
+  miss_a <- is.na(a) | a %in% c("", "NA")
+  miss_b <- is.na(b) | b %in% c("", "NA")
+  ifelse(miss_a | miss_b, miss_a & miss_b, a == b)
 }
 
 #' The message a run returns to the composer
@@ -586,7 +720,9 @@ default_checker <- function(k = 5, dominance = 0.6) {
 #'   `list(quorum = c(width_ratio = 1, "params.estimate" = 2))`. A field is
 #'   a metric of the node's `summary$metrics`, written bare or as
 #'   `metrics.<name>`, or a column of its `params` table, written
-#'   `params.<column>`.
+#'   `params.<column>`. Or a data frame with the columns `node`, `field`
+#'   and `dose`, and optionally `unit`, `n_units_field` and `digits`, as
+#'   [plan_returns()] gives it.
 #' @param checker A function of one value that returns `NA_character_` when
 #'   the value may be returned, else the reason it may not. See
 #'   [default_checker()].
@@ -594,6 +730,13 @@ default_checker <- function(k = 5, dominance = 0.6) {
 #'   belongs to, or `NULL`.
 #' @param round The round of the series, a whole number, or `NULL`.
 #' @param checks Passed to [run_record()].
+#' @param previous The previous round of the series, as a return from
+#'   [run_return()] or the path of one written by [write_return()], or
+#'   `NULL` for no differencing.
+#' @param k_diff The smallest number of units a value changed since the
+#'   previous round may rest on. Used only with `previous`.
+#' @param digits The significant figures of returned numbers, unless a
+#'   request declares its own.
 #'
 #' @returns An object of class `conductoR_return`: a list with `plan_id`,
 #'   `plan_hash`, `input_hash`, `series`, `round`, `dose`, `time`, `lines`
@@ -606,10 +749,36 @@ default_checker <- function(k = 5, dominance = 0.6) {
 #'
 #' @section Reasons a value is not returned:
 #' `above_dose` (the request needs a higher dose than the return),
-#' `not_available` (the node did not run, or has no such field), and
-#' whatever reason the checker gives.
+#' `not_available` (the node did not run, has no such field, or no row
+#' passes the row filter), `differencing` (see below), and whatever reason
+#' the checker gives.
 #'
-#' @seealso [run_record()], [write_return()], [series_report()].
+#' @section Declared fields:
+#' A request in the data-frame form, as [plan_returns()] reads it from the
+#' plan, may declare more than its dose. `unit` is set as the value's `unit`
+#' attribute before the checker sees it, so [default_checker()] scans a
+#' rate or a price for coordinates only when it is declared as one.
+#' `n_units_field` names the metric, or the `params` column, that holds the
+#' unit count; when it is declared the count is read from there and nowhere
+#' else, and a missing field is no count. `digits` rounds the value's
+#' numbers to that many significant figures, in place of `digits`.
+#'
+#' A `params` field may carry a row filter, `params.<column>[<key>=<value>]`,
+#' with several values separated by commas. Only the rows whose `key` column
+#' holds one of the values are returned, and the unit count is checked on
+#' those rows alone, so rows of two kinds in one table are requested apart.
+#'
+#' @section Differencing across rounds:
+#' Given the `previous` round of the series, a value that passes the checker
+#' is compared with the value returned there under the same node and field.
+#' When it changed, it is returned only if every row rests on at least
+#' `k_diff` units; otherwise it is refused as `differencing`, since the
+#' change between two rounds can reveal the few units behind it. A value
+#' missing in both rounds is unchanged. A field the previous round did not
+#' return is not compared.
+#'
+#' @seealso [run_record()], [write_return()], [series_report()],
+#'   [plan_returns()], [default_checker()].
 #'
 #' @author Max Moldovan
 #'
@@ -629,10 +798,13 @@ default_checker <- function(k = 5, dominance = 0.6) {
 #' @export
 run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
                        checker = default_checker(k = 5), series = NULL,
-                       round = NULL, checks = NULL) {
+                       round = NULL, checks = NULL, previous = NULL,
+                       k_diff = 10, digits = 7) {
   stopifnot(is.list(run),
             is.numeric(dose), length(dose) == 1L, !is.na(dose), dose >= 0,
-            dose == round(dose), is.function(checker))
+            dose == round(dose), is.function(checker),
+            is.numeric(k_diff), length(k_diff) == 1L, !is.na(k_diff),
+            .is_digits(digits))
   if (!is.null(series)) {
     stopifnot(is.character(series), length(series) == 1L, nzchar(series))
   }
@@ -642,6 +814,7 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
   }
   record <- run_record(run, triggers = triggers, checks = checks)
   reqs <- .check_requests(requests, .run_node_ids(run))
+  prev <- .previous_values(previous)
 
   # Each requested field: withheld, refused or returned ----------------------
   values <- list()
@@ -653,7 +826,8 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     if (r$dose > dose) {
       why <- "above_dose"
     } else {
-      v <- .request_value(run$bus[[r$node]], r$field)
+      v <- .request_value(run$bus[[r$node]], r$field, r$unit,
+                          r$n_units_field)
       why <- if (is.null(v)) "not_available" else checker(v)
       if (!(is.character(why) && length(why) == 1L)) {
         stop("checker must return NA_character_ or one reason string",
@@ -661,7 +835,18 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
       }
     }
     if (is.na(why)) {
-      fv <- .format_values(v)
+      fv <- .format_values(v, if (is.na(r$digits)) digits else r$digits)
+      before <- if (is.null(prev)) NULL
+                else prev[prev$node == r$node & prev$field == r$field, ,
+                          drop = FALSE]
+      if (!is.null(before) && nrow(before)) {
+        old <- before$value[match(seq_along(fv), as.integer(before$index))]
+        changed <- length(fv) != nrow(before) | !.same_text(fv, old)
+        n <- rep_len(.value_units(v), length(fv))
+        if (any(changed & (is.na(n) | n < k_diff))) why <- "differencing"
+      }
+    }
+    if (is.na(why)) {
       values[[length(values) + 1L]] <- data.frame(
         node = r$node, field = r$field, dose = r$dose,
         index = seq_along(fv), value = fv, stringsAsFactors = FALSE)
@@ -693,35 +878,93 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     class = "conductoR_return")
 }
 
-# The requests as a table: node, field, dose; refused when a node is not in
-# the run or a dose is not a whole number of at least 1.
+# The requests as a table: node, field, dose, unit, n_units_field, digits;
+# refused when a node is not in the run, a dose is not a whole number of at
+# least 1, a field is requested twice or a row filter is malformed.
 .check_requests <- function(requests, node_ids) {
+  cols <- c("node", "field", "dose", "unit", "n_units_field", "digits")
   empty <- data.frame(node = character(0), field = character(0),
-                      dose = numeric(0), stringsAsFactors = FALSE)
+                      dose = numeric(0), unit = character(0),
+                      n_units_field = character(0), digits = integer(0),
+                      stringsAsFactors = FALSE)
   if (is.null(requests) || !length(requests)) return(empty)
-  if (!is.list(requests) || is.null(names(requests)) ||
-      any(!nzchar(names(requests)))) {
-    stop("requests must be a list named by node id", call. = FALSE)
+  if (is.data.frame(requests)) {
+    out <- .check_request_table(requests, cols)
+    if (!nrow(out)) return(empty)
+  } else {
+    if (!is.list(requests) || is.null(names(requests)) ||
+        any(!nzchar(names(requests)))) {
+      stop("requests must be a list named by node id", call. = FALSE)
+    }
+    out <- NULL
   }
-  unknown <- setdiff(names(requests), node_ids)
+  ids <- if (is.null(out)) names(requests) else unique(out$node)
+  unknown <- setdiff(ids, node_ids)
   if (length(unknown)) {
     stop(sprintf("requests name nodes that are not in the run: %s",
                  paste(unknown, collapse = ", ")), call. = FALSE)
   }
-  rows <- lapply(names(requests), function(id) {
-    d <- requests[[id]]
-    if (!is.numeric(d) || is.null(names(d)) || any(!nzchar(names(d))) ||
-        anyNA(d) || any(d < 1) || any(d != round(d))) {
-      stop(sprintf(paste0("requests for '%s' must be a named vector of ",
-                          "doses, each a whole number of at least 1"), id),
-           call. = FALSE)
-    }
-    data.frame(node = id, field = names(d), dose = as.numeric(d),
-               stringsAsFactors = FALSE)
-  })
-  out <- do.call(rbind, rows)
+  if (is.null(out)) {
+    rows <- lapply(names(requests), function(id) {
+      d <- requests[[id]]
+      if (!is.numeric(d) || is.null(names(d)) || any(!nzchar(names(d))) ||
+          anyNA(d) || any(d < 1) || any(d != round(d))) {
+        stop(sprintf(paste0("requests for '%s' must be a named vector of ",
+                            "doses, each a whole number of at least 1"), id),
+             call. = FALSE)
+      }
+      data.frame(node = id, field = names(d), dose = as.numeric(d),
+                 unit = NA_character_, n_units_field = NA_character_,
+                 digits = NA_integer_, stringsAsFactors = FALSE)
+    })
+    out <- do.call(rbind, rows)
+  }
+  bad <- out$field[vapply(out$field, function(f) {
+    is.null(.parse_request_field(f))
+  }, logical(1))]
+  if (length(bad)) {
+    stop(sprintf(paste0("requested fields with a malformed row filter: %s; ",
+                        "write a row filter on a params column as ",
+                        "params.estimate[kind=state]"),
+                 paste(bad, collapse = ", ")), call. = FALSE)
+  }
+  twice <- duplicated(out[, c("node", "field")])
+  if (any(twice)) {
+    stop(sprintf("fields requested twice: %s",
+                 paste(out$node[twice], out$field[twice], sep = ".",
+                       collapse = ", ")), call. = FALSE)
+  }
   rownames(out) <- NULL
   out
+}
+
+# The data-frame form of requests, with every optional column filled in.
+.check_request_table <- function(requests, cols) {
+  if (!all(c("node", "field", "dose") %in% names(requests))) {
+    stop("a requests table must have the columns node, field and dose",
+         call. = FALSE)
+  }
+  out <- as.data.frame(requests, stringsAsFactors = FALSE)
+  for (k in c("unit", "n_units_field")) {
+    out[[k]] <- if (k %in% names(out)) as.character(out[[k]])
+                else rep(NA_character_, nrow(out))
+  }
+  if (!"digits" %in% names(out)) out$digits <- rep(NA_integer_, nrow(out))
+  d <- out$dose
+  if (!is.numeric(d) || anyNA(d) || any(d < 1) || any(d != round(d))) {
+    stop("requests: every dose must be a whole number of at least 1",
+         call. = FALSE)
+  }
+  g <- out$digits
+  if (!all(is.na(g) | vapply(g, .is_digits, logical(1)))) {
+    stop("requests: digits must be a whole number from 1 to 15",
+         call. = FALSE)
+  }
+  out$node <- as.character(out$node)
+  out$field <- as.character(out$field)
+  out$dose <- as.numeric(d)
+  out$digits <- as.integer(g)
+  out[, cols]
 }
 
 .csv_lines <- function(tab) {

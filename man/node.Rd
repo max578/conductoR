@@ -55,7 +55,7 @@ items stop the run with an error.}
 passes it on, \code{"halt-branch"} skips every node downstream, \code{"stop"} ends
 the run.}
 
-\item{returns}{As in \link{oap_node}, or a named vector of doses such as
+\item{returns}{As in \link{oap_node}, or a named vector of doses:
 \code{c(slope = 1, "params.estimate" = 2)}.}
 
 \item{triggers, hypotheses}{As in \link{oap_node}, or a data frame with one row

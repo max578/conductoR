@@ -1,6 +1,6 @@
-# Plan language 0.3 (Line D) and the postcondition gate (Line E) of the 0.3.0
-# plan: `inputs:` with `postconditions:`, node `returns:`, `triggers:` and
-# `hypotheses:`, schema v0.3, round trips and hash stability.
+# Plan language 0.3: `inputs:` with `postconditions:`, node `returns:`,
+# `triggers:` and `hypotheses:`, the postcondition gate, schema v0.3, round
+# trips and hash stability.
 
 # A window table: 48 trials, each 30 days long; `n` of them doubled, as in
 # the BT1 moisture step (need N36).

@@ -101,7 +101,7 @@ plan_input <- function(name, postconditions = character(0), key = NULL) {
     nm <- x$name
     if (!.is_string(nm) || !grepl("^[A-Za-z][A-Za-z0-9_.]*$", nm)) {
       add(paste0(f, ".name"), "the input needs a name",
-          "write the name of the table in data, such as \"trials\"")
+          "write the name of the table in data: \"trials\"")
     } else if (nm %in% names_seen) {
       add(paste0(f, ".name"), sprintf("input '%s' is declared twice", nm),
           "declare each input once")

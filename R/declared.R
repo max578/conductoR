@@ -1,9 +1,8 @@
-# declared.R -- What a node declares before the run in plan language 0.3:
-# the values it may return, the triggers it carries and the hypotheses it
-# tests. Each is kept in canonical order, so a plan hashes the same however
-# it was built.
+# declared.R -- What a node declares before the run: the values it may
+# return, the triggers it carries and the hypotheses it tests, each kept in
+# canonical order so a plan hashes the same however it was built.
 
-.RETURN_FIELDS <- c("field", "dose", "unit", "n_units_field")
+.RETURN_FIELDS <- c("field", "dose", "unit", "n_units_field", "digits")
 # The trigger columns of record.R without `node`, which the node supplies.
 .NODE_TRIGGER_FIELDS <- c("trigger_id", "class", "signal_type", "statistic",
                           "direction", "threshold", "action",
@@ -47,8 +46,25 @@
 }
 
 .canon_returns <- function(x) {
-  lapply(x, .canon_record, fields = .RETURN_FIELDS, ints = "dose")
+  lapply(x, .canon_record, fields = .RETURN_FIELDS,
+         ints = c("dose", "digits"))
 }
+
+# A requested field split into the field itself and its row filter:
+# `params.<column>[<key>=<value>,<value>]` keeps the rows whose `key` column
+# holds one of the values. Returns `list(field, key, values)`, `key` NULL
+# when there is no filter, or NULL when the filter is malformed.
+.parse_request_field <- function(field) {
+  if (!grepl("[][]", field)) {
+    return(list(field = field, key = NULL, values = NULL))
+  }
+  re <- "^(params\\.[^][]+)\\[([A-Za-z][A-Za-z0-9_.]*)=([^][]+)\\]$"
+  if (!grepl(re, field)) return(NULL)
+  list(field = sub(re, "\\1", field), key = sub(re, "\\2", field),
+       values = strsplit(sub(re, "\\3", field), ",", fixed = TRUE)[[1]])
+}
+
+.is_digits <- function(x) .is_whole(x) && x >= 1 && x <= 15
 
 .canon_triggers <- function(x) {
   lapply(x, .canon_record, fields = .NODE_TRIGGER_FIELDS, nums = "threshold")
@@ -119,6 +135,9 @@
     if (!.is_string(r$field) || !nzchar(r$field)) {
       add(paste0(e$f, ".field"), "must name a metric or params.<column>",
           "write field: \"slope\" or field: \"params.estimate\"")
+    } else if (is.null(.parse_request_field(r$field))) {
+      add(paste0(e$f, ".field"), "has a malformed row filter",
+          "filter a params column: \"params.estimate[kind=state]\"")
     } else if (r$field %in% seen) {
       add(paste0(e$f, ".field"), sprintf("'%s' is requested twice", r$field),
           "request each field once")
@@ -134,6 +153,10 @@
         add(paste0(e$f, ".", k), "must be a single string",
             sprintf("write %s as text in quotes", k))
       }
+    }
+    if (!is.null(r$digits) && !.is_digits(r$digits)) {
+      add(paste0(e$f, ".digits"), "must be a whole number from 1 to 15",
+          "write digits: 3")
     }
   }
 
@@ -266,6 +289,11 @@
 #' @returns `plan_requests()`: a list named by node id, each element a named
 #'   vector of the dose each requested field needs, as `run_return(requests
 #'   =)` takes it; an empty list when nothing is requested.
+#'   `plan_returns()`: the same requests with what each declares besides
+#'   its dose, a data frame with one row per requested field and the
+#'   columns `node`, `field`, `dose`, `unit`, `n_units_field` and `digits`
+#'   (missing where not declared), which `run_return(requests =)` also
+#'   takes.
 #'   `plan_triggers()`: a trigger table as [evaluate_triggers()] takes it,
 #'   with the node column filled in. `plan_hypotheses()`: a data frame with
 #'   one row per hypothesis and the columns `node`, `hypothesis_id`,
@@ -290,6 +318,7 @@
 #'                                firing_plant = "slope of 0.3 planted",
 #'                                silent_plant = "flat response planted"))))
 #' plan_requests(p)
+#' plan_returns(p)
 #' plan_triggers(p)
 #' plan_hypotheses(p)
 #'
@@ -308,6 +337,18 @@ plan_requests <- function(plan) {
       vapply(rs, function(r) as.numeric(r$dose), numeric(1)),
       vapply(rs, function(r) r$field, character(1)))
   }
+  out
+}
+
+#' @rdname plan_declared
+#' @export
+plan_returns <- function(plan) {
+  stopifnot(S7::S7_inherits(plan, oap_plan))
+  out <- .declared_table(plan, "returns", .canon_returns,
+                         c("node", .RETURN_FIELDS))
+  out$dose <- as.numeric(out$dose)
+  for (k in c("unit", "n_units_field")) out[[k]] <- as.character(out[[k]])
+  out$digits <- as.integer(out$digits)
   out
 }
 

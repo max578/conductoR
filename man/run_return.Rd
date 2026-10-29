@@ -12,7 +12,10 @@ run_return(
   checker = default_checker(k = 5),
   series = NULL,
   round = NULL,
-  checks = NULL
+  checks = NULL,
+  previous = NULL,
+  k_diff = 10,
+  digits = 7
 )
 }
 \arguments{
@@ -29,7 +32,9 @@ vector giving, for each requested field, the dose it needs, as in
 \code{list(quorum = c(width_ratio = 1, "params.estimate" = 2))}. A field is
 a metric of the node's \code{summary$metrics}, written bare or as
 \verb{metrics.<name>}, or a column of its \code{params} table, written
-\verb{params.<column>}.}
+\verb{params.<column>}. Or a data frame with the columns \code{node}, \code{field}
+and \code{dose}, and optionally \code{unit}, \code{n_units_field} and \code{digits}, as
+\code{\link[=plan_returns]{plan_returns()}} gives it.}
 
 \item{checker}{A function of one value that returns \code{NA_character_} when
 the value may be returned, else the reason it may not. See
@@ -41,6 +46,16 @@ belongs to, or \code{NULL}.}
 \item{round}{The round of the series, a whole number, or \code{NULL}.}
 
 \item{checks}{Passed to \code{\link[=run_record]{run_record()}}.}
+
+\item{previous}{The previous round of the series, as a return from
+\code{\link[=run_return]{run_return()}} or the path of one written by \code{\link[=write_return]{write_return()}}, or
+\code{NULL} for no differencing.}
+
+\item{k_diff}{The smallest number of units a value changed since the
+previous round may rest on. Used only with \code{previous}.}
+
+\item{digits}{The significant figures of returned numbers, unless a
+request declares its own.}
 }
 \value{
 An object of class \code{conductoR_return}: a list with \code{plan_id},
@@ -62,8 +77,37 @@ reason and never returned.
 \section{Reasons a value is not returned}{
 
 \code{above_dose} (the request needs a higher dose than the return),
-\code{not_available} (the node did not run, or has no such field), and
-whatever reason the checker gives.
+\code{not_available} (the node did not run, has no such field, or no row
+passes the row filter), \code{differencing} (see below), and whatever reason
+the checker gives.
+}
+
+\section{Declared fields}{
+
+A request in the data-frame form, as \code{\link[=plan_returns]{plan_returns()}} reads it from the
+plan, may declare more than its dose. \code{unit} is set as the value's \code{unit}
+attribute before the checker sees it, so \code{\link[=default_checker]{default_checker()}} scans a
+rate or a price for coordinates only when it is declared as one.
+\code{n_units_field} names the metric, or the \code{params} column, that holds the
+unit count; when it is declared the count is read from there and nowhere
+else, and a missing field is no count. \code{digits} rounds the value's
+numbers to that many significant figures, in place of \code{digits}.
+
+A \code{params} field may carry a row filter, \verb{params.<column>[<key>=<value>]},
+with several values separated by commas. Only the rows whose \code{key} column
+holds one of the values are returned, and the unit count is checked on
+those rows alone, so rows of two kinds in one table are requested apart.
+}
+
+\section{Differencing across rounds}{
+
+Given the \code{previous} round of the series, a value that passes the checker
+is compared with the value returned there under the same node and field.
+When it changed, it is returned only if every row rests on at least
+\code{k_diff} units; otherwise it is refused as \code{differencing}, since the
+change between two rounds can reveal the few units behind it. A value
+missing in both rounds is unchanged. A field the previous round did not
+return is not compared.
 }
 
 \examples{
@@ -81,7 +125,8 @@ ret$refused
 
 }
 \seealso{
-\code{\link[=run_record]{run_record()}}, \code{\link[=write_return]{write_return()}}, \code{\link[=series_report]{series_report()}}.
+\code{\link[=run_record]{run_record()}}, \code{\link[=write_return]{write_return()}}, \code{\link[=series_report]{series_report()}},
+\code{\link[=plan_returns]{plan_returns()}}, \code{\link[=default_checker]{default_checker()}}.
 }
 \author{
 Max Moldovan

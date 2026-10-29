@@ -4,26 +4,41 @@
 \alias{default_checker}
 \title{A floor on what a returned statistic may rest on}
 \usage{
-default_checker(k = 5, dominance = 0.6)
+default_checker(
+  k = 5,
+  dominance = 0.6,
+  forbidden = character(0),
+  coord_bands = NULL
+)
 }
 \arguments{
 \item{k}{The smallest number of units a returned statistic may rest on.}
 
 \item{dominance}{The largest share of the statistic one unit may hold,
 between 0 and 1.}
+
+\item{forbidden}{Strings no returned value may contain, matched as
+written: the names of places and trials in the holder's table.}
+
+\item{coord_bands}{\code{NULL} for no coordinate scan, or a list of bands,
+each a numeric vector of a lower and an upper bound.
+\code{list(c(-45, -10), c(110, 155))} covers the latitudes and longitudes
+of south-eastern Australia.}
 }
 \value{
 A function of one argument, the value, that returns
 \code{NA_character_} when the value may be returned and otherwise the
-reason it may not: \code{"no_unit_count"}, \code{"too_few_units"} or
-\code{"dominant_unit"}.
+reason it may not: \code{"no_unit_count"}, \code{"too_few_units"},
+\code{"dominant_unit"}, \code{"forbidden_string"} or \code{"coordinate_like"}.
 }
 \description{
 Builds the check \code{\link[=run_return]{run_return()}} applies to every value it would return
 above dose 0. The check refuses a statistic computed on fewer than \code{k}
 units, or one in which a single unit holds more than the \code{dominance}
 share, when that information is present. A value that carries no unit
-count is refused.
+count is refused. Two scans follow: a value whose text holds one of the
+\code{forbidden} strings is refused, and, when \code{coord_bands} is given, a
+number that could be a coordinate is refused.
 }
 \details{
 The unit count is read from the value's \code{n_units} attribute or, for a
@@ -31,16 +46,34 @@ column of a node's \code{params} table, from that table's \code{n_units} column.
 The largest share of one unit is read the same way from
 \code{max_unit_share}. A column passes only when every row passes.
 
-This check is a floor, not a disclosure guarantee. It does not detect
-differencing between returns, a statistic that reveals a unit through
-its own value, or a combination of returns that does; the data holder
-remains responsible for what leaves.
+A number is coordinate-like when it lies inside one of \code{coord_bands} and
+has more than two decimals. The scan applies to a value whose \code{unit}
+attribute is missing, or names a coordinate (\code{coordinate}, \code{degrees},
+\code{decimal_degrees}, \code{latitude}, \code{longitude}, in any case). A value
+declared in any other unit is not scanned: a rate in kg N/ha or a price
+in $/ha can fall inside a band without being a place. \code{\link[=run_return]{run_return()}}
+sets \code{unit} from the unit a request declares. There is no default band:
+a band covering every latitude and longitude would refuse almost every
+estimate, so the holder names the bands of the region the data come
+from.
+
+This check is a floor, not a disclosure guarantee. It does not detect a
+statistic that reveals a unit through its own value, or a combination of
+returns that does; differencing between rounds is checked by
+\code{\link[=run_return]{run_return()}} against the previous round. The data holder remains
+responsible for what leaves.
 }
 \examples{
 check <- default_checker(k = 5)
 check(structure(0.42, n_units = 12L))
 check(structure(0.42, n_units = 3L))
 check(0.42)
+
+scan <- default_checker(forbidden = "Roseworthy",
+                        coord_bands = list(c(-45, -10), c(110, 155)))
+scan(structure(138.6042, n_units = 12L))
+scan(structure(138.6042, n_units = 12L, unit = "kg N/ha"))
+scan(structure("near Roseworthy", n_units = 12L))
 
 }
 \seealso{

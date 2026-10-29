@@ -1,6 +1,20 @@
 # series.R -- The rounds of one analysis, read back from the returns written
 # into a series folder.
 
+# The non-empty lines of one section (`[message]`, `[values]`, ...) of a
+# written return, given its text or its path.
+.read_return_section <- function(txt, name) {
+  if (length(txt) == 1L && file.exists(txt)) {
+    txt <- readLines(txt, warn = FALSE)
+  }
+  sec <- grep("^\\[[a-z]+\\]$", txt)
+  at <- match(paste0("[", name, "]"), txt)
+  if (is.na(at)) return(character(0))
+  end <- c(sec[sec > at], length(txt) + 1L)[1] - 1L
+  out <- txt[seq_len(end - at) + at]
+  out[nzchar(out)]
+}
+
 # The header fields and message lines of one written return.
 .read_return <- function(path) {
   txt <- readLines(path, warn = FALSE)
@@ -10,18 +24,11 @@
     hit <- grep(paste0("^", name, ": "), head, value = TRUE)
     if (length(hit)) sub(paste0("^", name, ": "), "", hit[1]) else NA_character_
   }
-  section <- function(name) {
-    at <- match(paste0("[", name, "]"), txt)
-    if (is.na(at)) return(character(0))
-    end <- c(sec[sec > at], length(txt) + 1L)[1] - 1L
-    out <- txt[seq_len(end - at) + at]
-    out[nzchar(out)]
-  }
-  vals <- section("values")
+  vals <- .read_return_section(txt, "values")
   list(plan_hash = field("plan_hash"), series = field("series"),
        dose = as.integer(field("dose")),
        released = identical(field("released"), "TRUE"),
-       time = field("time"), lines = section("message"),
+       time = field("time"), lines = .read_return_section(txt, "message"),
        n_values = max(length(vals) - 1L, 0L))
 }
 

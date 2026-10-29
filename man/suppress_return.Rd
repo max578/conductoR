@@ -82,9 +82,9 @@ not found. The data holder remains responsible for what leaves.
 a metric), \code{value} (numeric; a missing value is never a route) and
 \code{status} (\code{"released"} or \code{"withheld"}, as the per-cell checks left it).
 Optional columns: \code{payload} (\code{"params"} when absent, \code{"metrics"} for a
-metric), and the counts of the unit's row, \code{n_units} (the units, such as
-trials, the value rests on), \code{n_obs} (the observations, such as plots)
-and \code{max_unit_share} (the largest share of the observations one unit
+metric), and the counts of the unit's row, \code{n_units} (the units the
+value rests on: trials, in a trial series), \code{n_obs} (its observations:
+plots) and \code{max_unit_share} (the largest share of the observations one unit
 holds). Counts are the same on every row of one node and unit, and are
 treated as public.
 }
@@ -93,8 +93,8 @@ treated as public.
 
 \code{partitions} declares which rows are sub-cells of which: one row per
 sub-cell, with the columns \code{parent} and \code{child}, and optionally
-\code{partition} (an id; one parent may have several partitions, such as
-states and years; default the parent), \code{units_additive} and
+\code{partition} (an id, since one parent may be split by state and again by
+year; default the parent), \code{units_additive} and
 \code{obs_additive} (whether the sub-cells' unit and observation counts add
 up to a part of the parent's; default \code{TRUE}) and \code{node} (the node it
 applies to; missing for every node). Sub-cells of the rates of one set

@@ -49,17 +49,17 @@
 #' a metric), `value` (numeric; a missing value is never a route) and
 #' `status` (`"released"` or `"withheld"`, as the per-cell checks left it).
 #' Optional columns: `payload` (`"params"` when absent, `"metrics"` for a
-#' metric), and the counts of the unit's row, `n_units` (the units, such as
-#' trials, the value rests on), `n_obs` (the observations, such as plots)
-#' and `max_unit_share` (the largest share of the observations one unit
+#' metric), and the counts of the unit's row, `n_units` (the units the
+#' value rests on: trials, in a trial series), `n_obs` (its observations:
+#' plots) and `max_unit_share` (the largest share of the observations one unit
 #' holds). Counts are the same on every row of one node and unit, and are
 #' treated as public.
 #'
 #' @section Partitions:
 #' `partitions` declares which rows are sub-cells of which: one row per
 #' sub-cell, with the columns `parent` and `child`, and optionally
-#' `partition` (an id; one parent may have several partitions, such as
-#' states and years; default the parent), `units_additive` and
+#' `partition` (an id, since one parent may be split by state and again by
+#' year; default the parent), `units_additive` and
 #' `obs_additive` (whether the sub-cells' unit and observation counts add
 #' up to a part of the parent's; default `TRUE`) and `node` (the node it
 #' applies to; missing for every node). Sub-cells of the rates of one set
@@ -489,9 +489,7 @@ suppress_return <- function(cells, partitions = NULL, links = NULL,
 }
 
 # A parent whose additive partition has one sub-cell with units: a field
-# withheld in one of the two is withheld in the other. (BT1's option B,
-# withholding the whole sub-cell row, is never smaller and on a tie gives
-# the same cells, so it is not separate here.)
+# withheld in one of the two is withheld in the other.
 .rule_identical <- function(cl, parts) {
   out <- .empty_withhold()
   pr <- cl[cl$payload == "params", , drop = FALSE]

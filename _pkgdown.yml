@@ -27,6 +27,7 @@ reference:
   - plan_declared
   - run_return
   - default_checker
+  - suppress_return
   - write_return
   - series_report
 - title: Emit a manifest

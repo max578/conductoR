@@ -56,6 +56,22 @@
   escaped. `plan_returns()` reads every declared field of a plan's returns
   into the table `run_return(requests =)` takes.
 
+## Secondary suppression
+
+* `suppress_return()` applies the rules that look across cells to the cells
+  of a release, after each has passed its own checks in `run_return()`:
+  complementary withholding over declared partitions (parent to sub-cells,
+  with whether unit and observation counts add), derivation closure over
+  declared links (sum, difference, ratio, identity; a unit `"<u>"` holds at
+  every unit), identical cells, zero-width intervals, by-design duplicates
+  (pinned once an earlier return released them), and a route search over
+  identities, two-term arithmetic and count-weighted means, broken by a
+  greedy smallest hitting set. Each change names its rule. A withheld value
+  with more than `route_limit` candidates has every candidate withheld and
+  is logged; a route only pinned values make is listed as unbreakable. The
+  rules fail closed and are a floor, not a disclosure guarantee.
+  `run_return()` is unchanged.
+
 ## Refusals, plan hash and plan checks
 
 * A node that refuses now leaves its abstention reason in the provenance

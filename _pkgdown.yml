@@ -9,12 +9,14 @@ reference:
   - oap_node
   - node
   - edge
+  - plan_input
   - plan_order
   - plan_node
 - title: Perform it
   contents:
   - conduct
   - conduct_step
+  - check_postconditions
   - run_provenance
 - title: Return to the composer
   contents:
@@ -22,6 +24,7 @@ reference:
   - run_record
   - format_record
   - evaluate_triggers
+  - plan_declared
   - run_return
   - default_checker
   - write_return

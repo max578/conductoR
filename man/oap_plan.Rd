@@ -4,7 +4,7 @@
 \alias{oap_plan}
 \title{An analytical plan}
 \usage{
-oap_plan(id = character(0), nodes = list(), meta = list())
+oap_plan(id = character(0), nodes = list(), meta = list(), inputs = list())
 }
 \arguments{
 \item{id}{A single string naming the plan.}
@@ -13,6 +13,10 @@ oap_plan(id = character(0), nodes = list(), meta = list())
 
 \item{meta}{A named list of free-form metadata, such as the question the
 plan answers. Serialised with the plan.}
+
+\item{inputs}{The tables the plan reads and the postconditions each must
+meet before the first node runs, a list of inputs as returned by
+\code{\link[=plan_input]{plan_input()}}. See the \emph{Input postconditions} section of \code{\link[=conduct]{conduct()}}.}
 }
 \value{
 An \code{oap_plan} object.

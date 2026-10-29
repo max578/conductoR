@@ -19,9 +19,9 @@ test_that("the schema is installed and lists the contract's targets", {
                   .ON_REFUSAL)
 })
 
-test_that("C5 the corpus holds 20 good and 20 bad plans", {
-  expect_length(corpus("good"), 20L)
-  expect_length(corpus("bad"), 20L)
+test_that("C5 the corpus holds 23 good and 23 bad plans (three of each 0.3)", {
+  expect_length(corpus("good"), 23L)
+  expect_length(corpus("bad"), 23L)
 })
 
 test_that("C5 jsonvalidate and plan_validate() agree on every corpus plan", {

@@ -7,15 +7,16 @@
 plan_schema()
 }
 \value{
-The path of the schema file, \code{oap_plan_v0.2.schema.json}.
+The path of the schema file, \code{oap_plan_v0.3.schema.json}.
 }
 \description{
 The schema (JSON Schema 2020-12) describes every field a plan may hold,
 its type and its allowed values. Editors can use it to check a plan as it
 is written, and an AI model can use it to write a plan as structured
 output. \code{\link[=plan_validate]{plan_validate()}} makes the same checks and adds those a schema
-cannot express: references between nodes, cycles and the condition
-grammar.
+cannot express: references between nodes, cycles, the condition and
+postcondition grammar, and ids unique across the plan. The schema of
+language version 0.2 stays installed beside it.
 }
 \examples{
 s <- jsonlite::fromJSON(plan_schema(), simplifyVector = FALSE)

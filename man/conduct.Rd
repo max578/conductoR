@@ -25,7 +25,9 @@ A list with elements \code{plan_id}, \code{plan_hash}, \code{input_hash},
 \code{provenance} (one record per node), \code{conditions} (one row per \code{when}
 evaluated: node, condition, value), \code{items} (one row per \code{foreach} item:
 node, item, instance, status, run_id), \code{stopped_by} (the node whose
-refusal ended the run, or \code{NA}), \code{n_nodes}, \code{n_skipped}, \code{seconds} and
+refusal ended the run, or \code{NA}), \code{postconditions} (one row per input
+postcondition checked: input, id, condition, holds, detail), \code{n_nodes},
+\code{n_skipped}, \code{seconds} and
 \code{terminal} (the manifest of the last node that ran). Returned invisibly.
 }
 \description{
@@ -103,6 +105,19 @@ ends the run; the nodes not yet performed are recorded as skipped. In a
 \code{foreach}, \code{"halt-branch"} and \code{"stop"} also skip the items not yet run.
 A tool that fails with an error stops the run in every case: an error is
 not a refusal.
+}
+
+\section{Input postconditions}{
+
+A plan may declare the tables it reads in \code{inputs}, each with the
+postconditions it must meet and, optionally, a key (see \code{\link[=plan_input]{plan_input()}}
+and \code{\link[=check_postconditions]{check_postconditions()}} for the grammar). Before the first node
+runs, every postcondition of every input is checked against \code{data}: an
+input names an element of \code{data}, or \code{data} itself under the name
+\code{"data"} when \code{data} is a data frame. When one does not hold, or an input
+is absent, no node runs and the run stops with an error of class
+\code{postcondition_failed} that lists every failure. \code{\link[=try_conduct]{try_conduct()}} turns it
+into a failed run whose record carries one line \verb{<input>.<id> postcondition_failed} per failure.
 }
 
 \section{Blinded runs}{

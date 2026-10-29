@@ -1,0 +1,8 @@
+{
+  "id": "return_dose_zero",
+  "plan_version": "0.3",
+  "nodes": [
+    {"id": "a", "tool": "t_a", "emits": "treatment_effects",
+     "returns": [{"field": "slope", "dose": 0}]}
+  ]
+}

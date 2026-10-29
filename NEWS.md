@@ -4,6 +4,35 @@
 * README carries status badges and lists related packages.
 * CI runs lintr (report-only) and test coverage.
 
+## Plan language 0.3 and input postconditions
+
+* A plan may declare the tables it reads, in `inputs`, with the
+  postconditions each must meet and an optional key (`plan_input()`).
+  `conduct()` checks every one before the first node runs. When one does
+  not hold, no node runs and the run stops with an error of class
+  `postcondition_failed` that lists every failure with a count of the rows
+  that fail and names no data value. `try_conduct()` records one line
+  `<input>.<id> postcondition_failed` per failure, and the error words gain
+  `postcondition_failed`.
+* A postcondition is a condition in the plan grammar. A bare column name is
+  checked row by row (`window_days <= 31`); `.n_rows`, `.n_cols`,
+  `.n_missing.<column>`, `.n_distinct.<column>`, `.n_duplicated.<column>`,
+  `.min.<column>`, `.max.<column>` and `.levels.<column>` summarise the
+  table. `check_postconditions()` makes the same check on any table, so a
+  script that writes a table by hand can check its output before writing
+  it, against conditions of its own or those a plan declares.
+* A node may declare what it may return (`returns`: field, dose, and
+  optionally unit and the field holding its unit count), the triggers it
+  carries (`triggers`) and the hypotheses it tests (`hypotheses`:
+  statistic, direction, threshold, and what rehearsal planted to show the
+  rule fires and stays silent). `plan_requests()`, `plan_triggers()` and
+  `plan_hypotheses()` read them into the forms `run_return()` and
+  `evaluate_triggers()` take, so a holder's runner needs only the plan file.
+* `plan_to_yaml()` writes `plan_version: "0.3"` when a plan uses any of
+  these fields. `plan_schema()` now returns the version 0.3 schema, and the
+  version 0.2 schema stays installed. Every new field is optional: a 0.1 or
+  0.2 plan reads, runs and hashes exactly as before.
+
 ## Refusals, plan hash and plan checks
 
 * A node that refuses now leaves its abstention reason in the provenance

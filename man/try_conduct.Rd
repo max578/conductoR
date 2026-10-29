@@ -19,7 +19,8 @@ The run returned by \code{\link[=conduct]{conduct()}}, or a failed run: a list w
 (the nodes performed before the error), \code{not_run} (the ids of the
 nodes not reached) and \code{failed}, a list with \code{node} (the id of the node
 that failed, or \code{"plan"} when the error came before any node ran),
-\code{error_type} and \code{message}.
+\code{error_type}, \code{message} and \code{postconditions} (the \verb{<input>.<id>} of
+each input postcondition that failed, when that stopped the run).
 }
 \description{
 Calls \code{\link[=conduct]{conduct()}} with the same arguments. When the run completes, the

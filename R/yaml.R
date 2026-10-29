@@ -15,14 +15,19 @@
               params = n@params)
   if (nzchar(n@tool_ref)) out$tool <- n@tool_ref
   if (inline) out$tool <- n@id
-  c(out, .node_v02_fields(n))
+  c(out, .node_v02_fields(n), .node_v03_fields(n))
 }
 
 # The plan as the list its YAML file holds; `inline_ok` is for checking only.
 .plan_spec <- function(plan, inline_ok = FALSE) {
   spec <- list(id = plan@id)
-  if (.uses_v02(plan)) spec$plan_version <- "0.2"
+  if (.uses_v03(plan)) {
+    spec$plan_version <- "0.3"
+  } else if (.uses_v02(plan)) {
+    spec$plan_version <- "0.2"
+  }
   spec$meta <- plan@meta
+  if (length(plan@inputs)) spec$inputs <- lapply(plan@inputs, .as_input)
   spec$nodes <- lapply(plan@nodes, .node_to_list, inline_ok = inline_ok)
   spec
 }
@@ -52,7 +57,9 @@
        params = .as_plain_list(x$params %||% list()),
        when = x$when %||% "", foreach = x$foreach,
        foreach_max = x$foreach_max %||% 50L,
-       on_refusal = x$on_refusal %||% "continue")
+       on_refusal = x$on_refusal %||% "continue",
+       returns = x$returns %||% list(), triggers = x$triggers %||% list(),
+       hypotheses = x$hypotheses %||% list())
 }
 
 # Every string is double-quoted and every number written plainly, so a plan
@@ -129,9 +136,11 @@
 #'
 #' Every string is written in double quotes and every number in plain
 #' decimal form, so the file reads back to the same plan. The line
-#' `plan_version: "0.2"` is written only when the plan uses a field added in
-#' version 0.2: `when`, `foreach`, `foreach_max`, `on_refusal` or a `select`
-#' node.
+#' `plan_version: "0.3"` is written when the plan uses a field added in
+#' version 0.3: `inputs` on the plan, or `returns`, `triggers` or
+#' `hypotheses` on a node. Otherwise `plan_version: "0.2"` is written only
+#' when the plan uses a field added in version 0.2: `when`, `foreach`,
+#' `foreach_max`, `on_refusal` or a `select` node.
 #'
 #' @param plan An [oap_plan].
 #' @param path A file to write, or `NULL` to return the YAML text.

@@ -1,0 +1,18 @@
+{
+  "id": "hypotheses",
+  "plan_version": "0.3",
+  "nodes": [
+    {"id": "a", "tool": "t_a", "emits": "treatment_effects"},
+    {
+      "id": "b",
+      "tool": "t_b",
+      "emits": "treatment_effects",
+      "consumes": [{"from": "a", "contract": "treatment_effects"}],
+      "hypotheses": [
+        {"hypothesis_id": "H_slope", "statistic": "slope", "direction": ">",
+         "threshold": 0, "firing_plant": "slope of 0.3 planted",
+         "silent_plant": "flat response planted"}
+      ]
+    }
+  ]
+}

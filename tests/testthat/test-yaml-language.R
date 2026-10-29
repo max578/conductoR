@@ -64,7 +64,7 @@ test_that("plan-level problems name the field and leave the node empty", {
   probs <- plan_validate("id: p\nplan_version: 0.2\nversion: 2\nnodes:\n- id: a\n  tool: t\n")
   expect_setequal(probs$field, c("plan_version", "version"))
   expect_identical(unique(probs$node), "")
-  expect_match(probs$fix[probs$field == "plan_version"], "\"0.2\" in quotes")
+  expect_match(probs$fix[probs$field == "plan_version"], "\"0.3\" in quotes")
 })
 
 test_that("graph problems are found: unknown inputs, cycles, foreach sources", {

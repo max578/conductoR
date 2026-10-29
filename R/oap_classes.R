@@ -54,6 +54,17 @@
 #' @param on_refusal What an abstaining result of this node does: `"continue"`
 #'   passes it on, `"halt-branch"` skips every node downstream, `"stop"` ends
 #'   the run.
+#' @param returns The values the node may return, a list of records each
+#'   with `field` (a metric, or `params.<column>`) and `dose` (a whole number
+#'   of at least 1), and optionally `unit` and `n_units_field`. Read by
+#'   [plan_requests()].
+#' @param triggers The node's declared signals, a list of records with the
+#'   columns of a trigger table (see [evaluate_triggers()]) other than
+#'   `node`. Read by [plan_triggers()].
+#' @param hypotheses The hypotheses the node tests, a list of records each
+#'   with `hypothesis_id`, `statistic`, `direction`, `threshold`,
+#'   `firing_plant` and `silent_plant` (what rehearsal planted to show the
+#'   rule fires and stays silent). Read by [plan_hypotheses()].
 #'
 #' @returns An `oap_node` object.
 #'
@@ -83,7 +94,10 @@ oap_node <- S7::new_class(
     foreach  = S7::new_property(S7::new_union(NULL, S7::class_list),
                                 default = NULL),
     foreach_max = S7::new_property(S7::class_integer, default = 50L),
-    on_refusal  = S7::new_property(S7::class_character, default = "continue")
+    on_refusal  = S7::new_property(S7::class_character, default = "continue"),
+    returns     = S7::new_property(S7::class_list, default = quote(list())),
+    triggers    = S7::new_property(S7::class_list, default = quote(list())),
+    hypotheses  = S7::new_property(S7::class_list, default = quote(list()))
   ),
   validator = function(self) {
     errs <- character(0)
@@ -94,7 +108,7 @@ oap_node <- S7::new_class(
                                      "square brackets or white space"),
                               self@id))
     }
-    errs <- c(errs, .node_v02_problems(self))
+    errs <- c(errs, .node_v02_problems(self), .node_v03_problems(self))
     if (length(self@operator) != 1L || !self@operator %in% .OAP_OPERATORS) {
       errs <- c(errs, sprintf("`operator` must be one of {%s}",
                               paste(.OAP_OPERATORS, collapse = ", ")))
@@ -125,6 +139,9 @@ oap_node <- S7::new_class(
 #' @param nodes A list of [oap_node] objects.
 #' @param meta A named list of free-form metadata, such as the question the
 #'   plan answers. Serialised with the plan.
+#' @param inputs The tables the plan reads and the postconditions each must
+#'   meet before the first node runs, a list of inputs as returned by
+#'   [plan_input()]. See the *Input postconditions* section of [conduct()].
 #'
 #' @returns An `oap_plan` object.
 #'
@@ -144,7 +161,8 @@ oap_plan <- S7::new_class(
   properties = list(
     id    = S7::class_character,
     nodes = S7::new_property(S7::class_list, default = quote(list())),
-    meta  = S7::new_property(S7::class_list, default = quote(list()))
+    meta  = S7::new_property(S7::class_list, default = quote(list())),
+    inputs = S7::new_property(S7::class_list, default = quote(list()))
   ),
   validator = function(self) {
     if (length(self@id) != 1L || !nzchar(self@id)) {
@@ -160,7 +178,7 @@ oap_plan <- S7::new_class(
         return(sprintf("node '%s' consumes unknown node '%s'", n@id, e$from))
       }
     }
-    errs <- .plan_v02_problems(self@nodes)
+    errs <- c(.plan_v02_problems(self@nodes), .plan_v03_problems(self))
     if (length(errs)) paste(errs, collapse = "; ") else NULL
   }
 )
@@ -175,6 +193,10 @@ oap_plan <- S7::new_class(
 #' @param tool A closure `function(inputs, data, node)` returning an
 #'   [orchestraManifest::orchestra_manifest], or a string reference in one of
 #'   the forms [resolve_tool()] accepts.
+#' @param returns As in [oap_node], or a named vector of doses such as
+#'   `c(slope = 1, "params.estimate" = 2)`.
+#' @param triggers,hypotheses As in [oap_node], or a data frame with one row
+#'   per record.
 #'
 #' @returns An [oap_node].
 #'
@@ -199,7 +221,8 @@ oap_plan <- S7::new_class(
 node <- function(id, tool = function(...) NULL, consumes = list(),
                  emits = "any", operator = "compute", role = "compute",
                  params = list(), when = "", foreach = NULL,
-                 foreach_max = 50L, on_refusal = "continue") {
+                 foreach_max = 50L, on_refusal = "continue",
+                 returns = list(), triggers = list(), hypotheses = list()) {
   tref <- ""
   if (is.character(tool)) {
     tref <- tool
@@ -213,7 +236,10 @@ node <- function(id, tool = function(...) NULL, consumes = list(),
   oap_node(id = id, tool = tool, tool_ref = tref, consumes = consumes,
            emits = emits, operator = operator, role = role, params = params,
            when = when, foreach = foreach, foreach_max = foreach_max,
-           on_refusal = on_refusal)
+           on_refusal = on_refusal,
+           returns = .as_records(returns, doses = TRUE),
+           triggers = .as_records(triggers),
+           hypotheses = .as_records(hypotheses))
 }
 
 #' Declare a typed edge

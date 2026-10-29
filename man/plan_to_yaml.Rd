@@ -22,9 +22,11 @@ a closure cannot be written to a file. Operator nodes carry no tool.
 \details{
 Every string is written in double quotes and every number in plain
 decimal form, so the file reads back to the same plan. The line
-\code{plan_version: "0.2"} is written only when the plan uses a field added in
-version 0.2: \code{when}, \code{foreach}, \code{foreach_max}, \code{on_refusal} or a \code{select}
-node.
+\code{plan_version: "0.3"} is written when the plan uses a field added in
+version 0.3: \code{inputs} on the plan, or \code{returns}, \code{triggers} or
+\code{hypotheses} on a node. Otherwise \code{plan_version: "0.2"} is written only
+when the plan uses a field added in version 0.2: \code{when}, \code{foreach},
+\code{foreach_max}, \code{on_refusal} or a \code{select} node.
 }
 \examples{
 p <- oap_plan(id = "one_lens", nodes = list(

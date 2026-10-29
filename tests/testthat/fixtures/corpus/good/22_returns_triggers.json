@@ -1,0 +1,20 @@
+{
+  "id": "returns_triggers",
+  "plan_version": "0.3",
+  "nodes": [
+    {
+      "id": "a",
+      "tool": "t_a",
+      "emits": "treatment_effects",
+      "returns": [
+        {"field": "slope", "dose": 1, "unit": "kg/ha per kg N", "n_units_field": "n_trials"},
+        {"field": "params.estimate", "dose": 2}
+      ],
+      "triggers": [
+        {"trigger_id": "T_spread", "class": "anomaly", "signal_type": "lens_spread",
+         "statistic": "spread", "direction": ">", "threshold": 1.3, "action": "return",
+         "rehearsal_plant": "spread of 1.6 planted in one state"}
+      ]
+    }
+  ]
+}

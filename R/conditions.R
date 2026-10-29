@@ -32,7 +32,8 @@
 #' Check a condition against the grammar
 #'
 #' @param text The condition as written in the plan.
-#' @param kind `"when"` for a node condition, `"rule"` for a `select` rule.
+#' @param kind `"when"` for a node condition, `"rule"` for a `select` rule,
+#'   `"post"` for an input postcondition.
 #'
 #' @returns A list with `problems` (character, empty when the condition is
 #'   valid), `expr` (the parsed expression or `NULL`) and `refs` (the node
@@ -40,7 +41,7 @@
 #'
 #' @noRd
 #' @keywords internal
-.cond_check <- function(text, kind = c("when", "rule")) {
+.cond_check <- function(text, kind = c("when", "rule", "post")) {
   kind <- match.arg(kind)
   out <- list(problems = character(0), expr = NULL, refs = character(0))
   if (
@@ -112,6 +113,17 @@
       } else {
         env$refs <- c(env$refs, ref$node)
       }
+    } else if (kind == "post" && startsWith(name, ".") &&
+               is.null(.post_ref(name))) {
+      bad(sprintf(
+        paste0(
+          "`%s` is not a table summary; use .n_rows, .n_cols, ",
+          ".n_missing.<column>, .n_distinct.<column>, ",
+          ".n_duplicated.<column>, .min.<column>, .max.<column> or ",
+          ".levels.<column>"
+        ),
+        name
+      ))
     }
     return(invisible())
   }

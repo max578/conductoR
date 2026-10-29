@@ -179,6 +179,18 @@ conduct_step <- function(node, inputs = list(), data = list()) {
 #' A tool that fails with an error stops the run in every case: an error is
 #' not a refusal.
 #'
+#' @section Input postconditions:
+#' A plan may declare the tables it reads in `inputs`, each with the
+#' postconditions it must meet and, optionally, a key (see [plan_input()]
+#' and [check_postconditions()] for the grammar). Before the first node
+#' runs, every postcondition of every input is checked against `data`: an
+#' input names an element of `data`, or `data` itself under the name
+#' `"data"` when `data` is a data frame. When one does not hold, or an input
+#' is absent, no node runs and the run stops with an error of class
+#' `postcondition_failed` that lists every failure. [try_conduct()] turns it
+#' into a failed run whose record carries one line `<input>.<id>
+#' postcondition_failed` per failure.
+#'
 #' @param plan An [oap_plan].
 #' @param data The data object every tool receives.
 #' @param out_dir A directory to write the provenance record into, or `NULL`
@@ -200,7 +212,9 @@ conduct_step <- function(node, inputs = list(), data = list()) {
 #'   `provenance` (one record per node), `conditions` (one row per `when`
 #'   evaluated: node, condition, value), `items` (one row per `foreach` item:
 #'   node, item, instance, status, run_id), `stopped_by` (the node whose
-#'   refusal ended the run, or `NA`), `n_nodes`, `n_skipped`, `seconds` and
+#'   refusal ended the run, or `NA`), `postconditions` (one row per input
+#'   postcondition checked: input, id, condition, holds, detail), `n_nodes`,
+#'   `n_skipped`, `seconds` and
 #'   `terminal` (the manifest of the last node that ran). Returned invisibly.
 #'
 #' @seealso [conduct_step()], [run_provenance()], [plan_to_yaml()],
@@ -258,6 +272,7 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
   stopped_by <- NA_character_
   last_produced <- NA_character_
   t0 <- Sys.time()
+  postconditions <- .stop_if_failed(.post_results(plan@inputs, data))
 
   record <- function(id, operator, consumes, emits, emitter, run_id,
                      data_hash, abstained, seconds, tag = "",
@@ -353,7 +368,7 @@ conduct <- function(plan, data = list(), out_dir = NULL, verbose = TRUE,
               conditions = .bind_rows(conds, c("node", "condition", "value")),
               items = .bind_rows(items, c("node", "item", "instance",
                                           "status", "run_id")),
-              stopped_by = stopped_by,
+              stopped_by = stopped_by, postconditions = postconditions,
               n_nodes = length(order), n_skipped = n_skipped,
               seconds = round(total, 3), terminal = terminal)
   if (!is.null(out_dir)) .write_provenance(run, out_dir)

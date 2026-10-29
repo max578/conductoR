@@ -7,7 +7,8 @@
                   "unidentifiable_parameter", "assumption_check_failed",
                   "tool_error", "licence_unavailable",
                   "credential_unavailable", "no_interior_minimum",
-                  "no_interior_optimum", "no_response")
+                  "no_interior_optimum", "no_response",
+                  "postcondition_failed")
 
 .TRIGGER_COLS <- c("trigger_id", "node", "class", "signal_type", "statistic",
                    "direction", "threshold", "action")
@@ -63,7 +64,8 @@
 #'   (the nodes performed before the error), `not_run` (the ids of the
 #'   nodes not reached) and `failed`, a list with `node` (the id of the node
 #'   that failed, or `"plan"` when the error came before any node ran),
-#'   `error_type` and `message`.
+#'   `error_type`, `message` and `postconditions` (the `<input>.<id>` of
+#'   each input postcondition that failed, when that stopped the run).
 #'
 #' @seealso [run_record()], [run_return()].
 #'
@@ -105,7 +107,9 @@ try_conduct <- function(plan, data = list(), ...) {
        bus = state$bus, provenance = state$prov,
        not_run = setdiff(order, c(done, state$node)),
        failed = list(node = state$node, error_type = .error_type_of(run),
-                     message = conditionMessage(run)))
+                     message = conditionMessage(run),
+                     postconditions = if (inherits(run, "postcondition_failed"))
+                       run$failed))
 }
 
 # Called where the error is signalled: the innermost frame holding an
@@ -330,8 +334,10 @@ evaluate_triggers <- function(run, triggers) {
 #'   or `FALSE`. A node may also declare its own checks as a named logical
 #'   vector in `summary$metrics$checks`. `NULL` for none.
 #'
-#' @returns A data frame with columns `kind` (`"node"`, `"trigger"`, or
-#'   `"plan"` when a run failed before any node ran), `id`, `emitter`,
+#' @returns A data frame with columns `kind` (`"node"`, `"trigger"`,
+#'   `"input"` for an input postcondition that stopped the run, with `id`
+#'   `<input>.<postcondition id>`, or `"plan"` when a run failed before any
+#'   node ran for another reason), `id`, `emitter`,
 #'   `emits` (for a trigger, its action), `status`, `reason`, `abstained`,
 #'   `checks_passed` and `checks_failed` (check names joined by `;`).
 #'
@@ -352,7 +358,9 @@ evaluate_triggers <- function(run, triggers) {
 #' cannot reach a licence or read a credential the tool needs); and the
 #' shape words `no_interior_minimum`, `no_interior_optimum` and
 #' `no_response` (a fitted curve has no turning point inside the observed
-#' range, or no response at all). A completed node reports an
+#' range, or no response at all). An input row reports
+#' `postcondition_failed`: the table did not meet a postcondition the plan
+#' declared for it, so no node ran. A completed node reports an
 #' issue through `summary$metrics$issue`; a word outside this list is
 #' recorded as `tool_error`. A refused node with no issue reports its
 #' abstention reason when that reason is one of the words, and nothing
@@ -409,9 +417,15 @@ run_record <- function(run, triggers = NULL, checks = NULL) {
   # The failed node and the nodes not reached --------------------------------
   if (!is.null(run$failed)) {
     f <- run$failed
-    rows <- c(rows, list(.record_row(
-      if (identical(f$node, "plan")) "plan" else "node", f$node,
-      status = "failed", reason = f$error_type)))
+    rows <- c(rows, if (length(f$postconditions)) {
+      lapply(f$postconditions, function(id) {
+        .record_row("input", id, status = "failed",
+                    reason = "postcondition_failed")
+      })
+    } else {
+      list(.record_row(if (identical(f$node, "plan")) "plan" else "node",
+                       f$node, status = "failed", reason = f$error_type))
+    })
     rows <- c(rows, lapply(run$not_run %||% character(0), function(id) {
       .record_row("node", id, status = "not_run")
     }))
@@ -460,8 +474,8 @@ run_record <- function(run, triggers = NULL, checks = NULL) {
 #' @export
 format_record <- function(record) {
   stopifnot(is.data.frame(record), all(.RECORD_COLS %in% names(record)))
-  hit <- record[record$kind %in% c("node", "plan") & !is.na(record$reason), ,
-                drop = FALSE]
+  hit <- record[record$kind %in% c("node", "plan", "input") &
+                  !is.na(record$reason), , drop = FALSE]
   issue_lines <- unlist(lapply(seq_len(nrow(hit)), function(i) {
     paste(hit$id[i], strsplit(hit$reason[i], ";", fixed = TRUE)[[1]])
   }))

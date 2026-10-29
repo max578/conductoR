@@ -1,0 +1,22 @@
+{
+  "id": "inputs_postconditions",
+  "plan_version": "0.3",
+  "inputs": [
+    {
+      "name": "trials",
+      "key": ["trial_id", "year"],
+      "postconditions": [
+        {"id": "P_rows", "condition": ".n_rows == 48"},
+        {"id": "P_days", "condition": "window_days <= 31"},
+        {"id": "P_levels", "condition": ".levels.state %in% c(\"north\", \"south\")"}
+      ]
+    },
+    {
+      "name": "sites",
+      "key": "site_id"
+    }
+  ],
+  "nodes": [
+    {"id": "a", "tool": "t_a", "emits": "treatment_effects"}
+  ]
+}

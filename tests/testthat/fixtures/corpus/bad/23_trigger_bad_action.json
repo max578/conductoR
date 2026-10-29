@@ -1,0 +1,9 @@
+{
+  "id": "trigger_bad_action",
+  "plan_version": "0.3",
+  "nodes": [
+    {"id": "a", "tool": "t_a", "emits": "treatment_effects",
+     "triggers": [{"trigger_id": "T_x", "class": "anomaly", "signal_type": "x_high",
+                   "statistic": "x", "direction": ">", "threshold": 1, "action": "publish"}]}
+  ]
+}

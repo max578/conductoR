@@ -15,7 +15,10 @@ node(
   when = "",
   foreach = NULL,
   foreach_max = 50L,
-  on_refusal = "continue"
+  on_refusal = "continue",
+  returns = list(),
+  triggers = list(),
+  hypotheses = list()
 )
 }
 \arguments{
@@ -51,6 +54,12 @@ items stop the run with an error.}
 \item{on_refusal}{What an abstaining result of this node does: \code{"continue"}
 passes it on, \code{"halt-branch"} skips every node downstream, \code{"stop"} ends
 the run.}
+
+\item{returns}{As in \link{oap_node}, or a named vector of doses such as
+\code{c(slope = 1, "params.estimate" = 2)}.}
+
+\item{triggers, hypotheses}{As in \link{oap_node}, or a data frame with one row
+per record.}
 }
 \value{
 An \link{oap_node}.

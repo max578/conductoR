@@ -1,7 +1,8 @@
 # validate.R -- Check a plan against the plan language and report every problem
 # at once. Mirrors inst/schema/; references, cycles and conditions only here.
 
-.PLAN_FIELDS <- c("id", "plan_version", "meta", "nodes")
+.PLAN_FIELDS <- c("id", "plan_version", "meta", "inputs", "nodes")
+.PLAN_VERSIONS <- c("0.1", "0.2", "0.3")
 .NODE_FIELDS <- c(
   "id",
   "role",
@@ -13,7 +14,10 @@
   "when",
   "foreach",
   "foreach_max",
-  "on_refusal"
+  "on_refusal",
+  "returns",
+  "triggers",
+  "hypotheses"
 )
 .ON_REFUSAL <- c("continue", "halt-branch", "stop")
 .GATE_MODES <- c("flag", "halt-branch", "reroute")
@@ -612,12 +616,12 @@
     add_row("", "id", "the plan needs an id", "write id: \"my_plan\"")
   }
   pv <- spec$plan_version
-  if (!is.null(pv) && !(.is_string(pv) && pv %in% c("0.1", "0.2"))) {
+  if (!is.null(pv) && !(.is_string(pv) && pv %in% .PLAN_VERSIONS)) {
     add_row(
       "",
       "plan_version",
       sprintf("`%s` is not a plan version", format(pv)),
-      "write plan_version: \"0.2\" in quotes"
+      "write plan_version: \"0.3\" in quotes"
     )
   }
   if (!is.null(spec$meta) && !.is_map(spec$meta)) {
@@ -627,6 +631,9 @@
       "meta must be a mapping",
       "write meta as key: value pairs"
     )
+  }
+  for (p in .inputs_rules(spec$inputs)) {
+    add_row("", p$field, p$rule, p$fix)
   }
   nodes <- spec$nodes
   if (!is.list(nodes) || length(nodes) == 0L || !is.null(names(nodes))) {
@@ -832,6 +839,9 @@
       )
       onr <- "continue"
     }
+    for (p in .node_v03_rules(x$returns, x$triggers, x$hypotheses)) {
+      bad(p$field, p$rule, p$fix)
+    }
     if (!ok_nodes[i]) {
       next
     }
@@ -910,7 +920,7 @@
     return(result())
   }
   whens <- stats::setNames(lapply(nodes, function(x) x$when %||% ""), ids)
-  for (p in .graph_rules(ids, deps, whens)) {
+  for (p in c(.graph_rules(ids, deps, whens), .declared_id_rules(nodes))) {
     add_row(p$node, p$field, p$rule, p$fix)
   }
   result()
@@ -946,6 +956,7 @@
   oap_plan(
     id = spec$id,
     meta = .as_plain_list(spec$meta %||% list()),
+    inputs = lapply(spec$inputs %||% list(), .as_input),
     nodes = lapply(spec$nodes, .node_from_list)
   )
 }
@@ -1058,10 +1069,11 @@ plan_from_json <- function(path) {
 #' its type and its allowed values. Editors can use it to check a plan as it
 #' is written, and an AI model can use it to write a plan as structured
 #' output. [plan_validate()] makes the same checks and adds those a schema
-#' cannot express: references between nodes, cycles and the condition
-#' grammar.
+#' cannot express: references between nodes, cycles, the condition and
+#' postcondition grammar, and ids unique across the plan. The schema of
+#' language version 0.2 stays installed beside it.
 #'
-#' @returns The path of the schema file, `oap_plan_v0.2.schema.json`.
+#' @returns The path of the schema file, `oap_plan_v0.3.schema.json`.
 #'
 #' @seealso [plan_validate()].
 #'
@@ -1075,7 +1087,7 @@ plan_from_json <- function(path) {
 plan_schema <- function() {
   system.file(
     "schema",
-    "oap_plan_v0.2.schema.json",
+    "oap_plan_v0.3.schema.json",
     package = "conductoR",
     mustWork = TRUE
   )

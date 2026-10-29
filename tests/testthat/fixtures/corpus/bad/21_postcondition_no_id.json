@@ -1,0 +1,10 @@
+{
+  "id": "postcondition_no_id",
+  "plan_version": "0.3",
+  "inputs": [
+    {"name": "trials", "postconditions": [{"condition": ".n_rows == 48"}]}
+  ],
+  "nodes": [
+    {"id": "a", "tool": "t_a", "emits": "treatment_effects"}
+  ]
+}

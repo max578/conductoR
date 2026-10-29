@@ -16,7 +16,10 @@ oap_node(
   when = "",
   foreach = NULL,
   foreach_max = 50L,
-  on_refusal = "continue"
+  on_refusal = "continue",
+  returns = list(),
+  triggers = list(),
+  hypotheses = list()
 )
 }
 \arguments{
@@ -54,6 +57,20 @@ items stop the run with an error.}
 \item{on_refusal}{What an abstaining result of this node does: \code{"continue"}
 passes it on, \code{"halt-branch"} skips every node downstream, \code{"stop"} ends
 the run.}
+
+\item{returns}{The values the node may return, a list of records each
+with \code{field} (a metric, or \verb{params.<column>}) and \code{dose} (a whole number
+of at least 1), and optionally \code{unit} and \code{n_units_field}. Read by
+\code{\link[=plan_requests]{plan_requests()}}.}
+
+\item{triggers}{The node's declared signals, a list of records with the
+columns of a trigger table (see \code{\link[=evaluate_triggers]{evaluate_triggers()}}) other than
+\code{node}. Read by \code{\link[=plan_triggers]{plan_triggers()}}.}
+
+\item{hypotheses}{The hypotheses the node tests, a list of records each
+with \code{hypothesis_id}, \code{statistic}, \code{direction}, \code{threshold},
+\code{firing_plant} and \code{silent_plant} (what rehearsal planted to show the
+rule fires and stays silent). Read by \code{\link[=plan_hypotheses]{plan_hypotheses()}}.}
 }
 \value{
 An \code{oap_node} object.

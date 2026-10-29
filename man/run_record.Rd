@@ -18,8 +18,10 @@ or \code{FALSE}. A node may also declare its own checks as a named logical
 vector in \code{summary$metrics$checks}. \code{NULL} for none.}
 }
 \value{
-A data frame with columns \code{kind} (\code{"node"}, \code{"trigger"}, or
-\code{"plan"} when a run failed before any node ran), \code{id}, \code{emitter},
+A data frame with columns \code{kind} (\code{"node"}, \code{"trigger"},
+\code{"input"} for an input postcondition that stopped the run, with \code{id}
+\verb{<input>.<postcondition id>}, or \code{"plan"} when a run failed before any
+node ran for another reason), \code{id}, \code{emitter},
 \code{emits} (for a trigger, its action), \code{status}, \code{reason}, \code{abstained},
 \code{checks_passed} and \code{checks_failed} (check names joined by \verb{;}).
 
@@ -48,7 +50,9 @@ A node's reason is one or more of \code{typed_edge_violation},
 cannot reach a licence or read a credential the tool needs); and the
 shape words \code{no_interior_minimum}, \code{no_interior_optimum} and
 \code{no_response} (a fitted curve has no turning point inside the observed
-range, or no response at all). A completed node reports an
+range, or no response at all). An input row reports
+\code{postcondition_failed}: the table did not meet a postcondition the plan
+declared for it, so no node ran. A completed node reports an
 issue through \code{summary$metrics$issue}; a word outside this list is
 recorded as \code{tool_error}. A refused node with no issue reports its
 abstention reason when that reason is one of the words, and nothing

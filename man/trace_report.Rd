@@ -14,9 +14,8 @@ or the path of a text file.}
 or the path of one written by \code{\link[=write_return]{write_return()}}.}
 
 \item{allow}{Numbers the report may show that are not results of the
-run, such as the confidence level of an interval, a year or a section
-number. Each is listed in the trace as \code{declared}. A numeric or
-character vector, or \code{NULL}.}
+run, for example the confidence level of an interval. Each is listed in
+the trace as \code{declared}. A numeric or character vector, or \code{NULL}.}
 
 \item{run}{The run the release was built from, or \code{NULL}. When given,
 the version of the tool behind each traced value is added to the trace.}
@@ -43,9 +42,8 @@ A reference names a row of the release's \code{values}: \code{{{fit:slope}}} for
 the value of a metric, \code{{{fit:params.estimate:3}}} for the third row of a
 \code{params} field. The index may be left out only when the field returned a
 single value. The value is entered as the release holds it, at the
-significant figures the plan declared; a number the report needs in
-another form, such as a difference or a percentage, is added to the plan
-as a node, so that it too is a value of the release.
+significant figures the plan declared. A number the report needs in
+another form, for example a difference, is added to the plan as a node.
 }
 
 \section{The trace}{

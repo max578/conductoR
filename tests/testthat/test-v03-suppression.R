@@ -462,9 +462,9 @@ test_that("every rule reported is one of the listed words", {
     "duplicate", "route", "route_limit")))
 })
 
-# A table laid out as BT1's, from synthetic labels ------------------------
+# A trial-series table, from synthetic labels ----------------------------
 
-test_that("the declared structure covers a BT1-shaped table", {
+test_that("the declared structure covers a trial-series table", {
   units <- c("pooled", "state_A", "state_B", "year_2020", "year_2021",
              "state_year_A_2020", "state_year_A_2021",
              "state_year_B_2020", "state_year_B_2021", "rate_60", "rate_120")
@@ -478,7 +478,7 @@ test_that("the declared structure covers a BT1-shaped table", {
   cells <- sup_cells(node = "q1", unit = units, value = est, status = status,
                      n_units = n_t, n_obs = n_p,
                      max_unit_share = rep(0.15, length(units)))
-  # the partitions, read from the labels by the holder as BT1 read them
+  # the partitions, read from the labels by the holder
   st <- grep("^state_[A-Z]$", units, value = TRUE)
   yr <- grep("^year_[0-9]{4}$", units, value = TRUE)
   sy <- grep("^state_year_", units, value = TRUE)

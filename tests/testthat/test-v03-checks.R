@@ -40,7 +40,7 @@ test_that("the coordinate scan refuses a value in a declared band", {
 test_that("a declared unit other than a coordinate is never scanned", {
   chk <- default_checker(coord_bands = bands_au)
   # a nitrogen rate in the longitude band and a negative price difference
-  # in the latitude band (BT1 needs N18, N22, N26)
+  # in the latitude band
   expect_identical(chk(structure(120.375, n_units = 10L, unit = "kg N/ha")),
                    NA_character_)
   expect_identical(chk(structure(-31.125, n_units = 10L, unit = "$/ha")),

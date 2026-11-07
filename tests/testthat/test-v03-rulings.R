@@ -1,6 +1,6 @@
-# The four changes ruled after the BT1 replay of 2026-10-29: a refused node
-# returns only its refusal, a unit count declared on another node, differencing
-# against every earlier round, and a warning for a return with no unit.
+# Four return rules: a refused node returns only its refusal, a unit count
+# declared on another node, differencing against every earlier round, and a
+# warning for a return with no unit.
 
 ruling_plan <- function(fit_metrics = list(), fit_abstained = FALSE,
                         fid_metrics = list(n_trials = 12L),

@@ -17,7 +17,7 @@
   no text and a trace naming each failure with its reason. With the run
   given, the trace also names the version of the tool behind each value.
 
-## Rulings from the BT1 replay
+## Returns
 
 * A node that refused returns only its refusal, which is in the record.
   Every field requested from it is refused as `node_refused`.

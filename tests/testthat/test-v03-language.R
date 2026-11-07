@@ -2,8 +2,7 @@
 # `triggers:` and `hypotheses:`, the postcondition gate, schema v0.3, round
 # trips and hash stability.
 
-# A window table: 48 trials, each 30 days long; `n` of them doubled, as in
-# the BT1 moisture step (need N36).
+# A window table: 48 trials, each 30 days long, `n` of them doubled.
 window_table <- function(n_doubled = 0L) {
   tab <- data.frame(trial_id = sprintf("t%02d", 1:48),
                     state = rep(c("north", "south"), 24),

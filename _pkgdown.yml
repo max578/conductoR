@@ -41,6 +41,11 @@ reference:
   - resolve_tool
   - plan_to_yaml
   - plan_from_yaml
+  - plan_from_json
+  - plan_schema
+  - plan_validate
+  - plan_hash
+  - same_plan
 - title: targets backend
   contents:
   - compile_to_targets

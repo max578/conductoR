@@ -1,5 +1,7 @@
-# conductoR (development version)
+# conductoR 0.3.0
 
+* New vignette, "Returning results from a run", follows one run on open
+  maize nitrogen data from the input postconditions to a traced report.
 * The package has a logo.
 * README carries status badges and lists related packages.
 * CI runs lintr (report-only) and test coverage.

@@ -1,0 +1,239 @@
+---
+title: "Returning results from a run"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Returning results from a run}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+<!-- Render time: under 2 s under rmarkdown::render(); macOS arm64, R 4.6.1,
+     one core. Six linear models on 136 rows. -->
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+```{r library}
+library(conductoR)
+```
+
+## Who sees what
+
+A plan is often written by someone who never sees the data: a composer,
+human or automated, sends the plan to the data holder, the holder runs it,
+and only a return comes back. This vignette follows one run from the table
+the holder checks before anything runs to the report the composer writes
+afterwards. Five steps, each a function of the package:
+
+1. the table is checked against the plan's postconditions (`conduct()`)
+2. the return carries more values as its dose rises (`run_return()`)
+3. each value is checked on its own before it leaves (`default_checker()`)
+4. values that could be solved from one another are withheld together
+   (`suppress_return()`)
+5. every number in the report is traced to a value of the return
+   (`trace_report()`)
+
+## The data and the plan
+
+`agridat::hernandez.nitrogen` holds 136 maize plots from a 2006 trial at
+five Minnesota sites, four replicates per site, at nitrogen rates from 0 to
+268 kg/ha (Hernandez and Mulla 2008). Yield is in t/ha. Site S5 has 24 plots,
+the other sites 28.
+
+```{r data}
+data("hernandez.nitrogen", package = "agridat")
+d <- hernandez.nitrogen
+table(d$site)
+```
+
+One tool fits the response of yield to nitrogen, across all plots and at
+each site. The site estimates go in the manifest's `params` table, one row
+per site with its plot count.
+
+```{r tool}
+fit_response <- function(inputs, data, node) {
+  fit <- lm(yield ~ nitro, data = data)
+  slope <- unname(coef(fit)["nitro"])
+  n <- nrow(data)
+  by_site <- do.call(rbind, lapply(split(data, data$site), function(s) {
+    data.frame(site = as.character(s$site[1]),
+               slope = unname(coef(lm(yield ~ nitro, data = s))["nitro"]),
+               mean_yield = mean(s$yield),
+               n_plots = nrow(s))
+  }))
+  m <- lens_to_manifest(
+    "effect", slope > 0, emitter = "maize", method = "maize:ols",
+    metrics = list(slope = structure(slope, n_units = n),
+                   slope_per_100 = structure(100 * slope, n_units = n),
+                   mean_yield = structure(mean(data$yield), n_units = n)))
+  m@params <- by_site
+  m
+}
+```
+
+The plan declares two things beyond its node. The input `data` must have
+136 rows, no negative rate, and one row per site, replicate and rate. The
+node declares what it may return: the overall values at dose 1, the site
+rows at dose 2, each with its unit and its significant figures. A site row
+rests on the plots in its `n_plots` column.
+
+```{r plan}
+plots <- plan_input("data", key = c("site", "rep", "nitro"),
+                    postconditions = c(P_rows = ".n_rows == 136",
+                                       P_rate = "nitro >= 0"))
+per_kg <- "t/ha per kg N/ha"
+plan <- oap_plan(
+  id = "maize_nitrogen",
+  meta = list(question = "How does maize yield respond to nitrogen?"),
+  inputs = list(plots),
+  nodes = list(node(
+    "fit", fit_response, emits = "treatment_effects",
+    returns = list(
+      list(field = "slope", dose = 1, unit = per_kg, digits = 3),
+      list(field = "slope_per_100", dose = 1, unit = "t/ha", digits = 3),
+      list(field = "mean_yield", dose = 1, unit = "t/ha", digits = 3),
+      list(field = "params.slope", dose = 2, unit = per_kg,
+           n_units_field = "n_plots", digits = 3),
+      list(field = "params.mean_yield", dose = 2, unit = "t/ha",
+           n_units_field = "n_plots", digits = 3)))))
+plan_returns(plan)
+```
+
+## Step 1: the table is checked before anything runs
+
+A table that breaks a postcondition stops the run before the first node.
+The error names the condition and how many rows fail, never a value.
+
+```{r postconditions}
+broken <- d
+broken$nitro[3] <- -33.6
+msg <- tryCatch(conduct(plan, data = broken, verbose = FALSE),
+                postcondition_failed = function(e) conditionMessage(e))
+cat(msg)
+```
+
+The real table passes, and the run goes ahead.
+
+```{r run}
+run <- conduct(plan, data = d, verbose = FALSE)
+run$postconditions[, c("input", "id", "holds")]
+```
+
+## Step 2: the dose sets how much comes back
+
+At dose 0 the return is the record of the run and its typed message alone.
+Every requested value is listed as refused, with the reason `above_dose`.
+
+```{r dose0}
+requests <- plan_returns(plan)
+ret0 <- run_return(run, dose = 0, requests = requests)
+ret0$lines
+ret0$refused
+```
+
+At dose 1 the overall values come back. The site rows still need dose 2.
+
+```{r dose1}
+ret1 <- run_return(run, dose = 1, requests = requests)
+ret1$values
+ret1$refused
+```
+
+## Step 3: each value is checked before it leaves
+
+At dose 2 the site rows are requested too. The checker refuses any value
+resting on fewer than `k` units, here `k = 25` plots. A `params` field is
+checked row by row, so S5's row, on 24 plots, is withheld and the other
+four are returned. The refusal counts the withheld rows and does not name
+them.
+
+```{r dose2}
+ret2 <- run_return(run, dose = 2, requests = requests,
+                   checker = default_checker(k = 25))
+ret2$values[ret2$values$field == "params.mean_yield", ]
+ret2$refused
+```
+
+## Step 4: a withheld value must not follow from the released ones
+
+Withholding S5's mean yield is not enough. The overall mean is the
+plot-weighted mean of the five site means, so S5's mean can be solved
+from what was returned:
+
+```{r route}
+site <- aggregate(yield ~ site, data = d, FUN = mean)
+site$site <- as.character(site$site)
+n <- as.vector(table(d$site))
+solved <- (sum(n) * mean(d$yield) - sum(site$yield[1:4] * n[1:4])) / n[5]
+all.equal(solved, site$yield[5])
+```
+
+`suppress_return()` looks across the cells of a release for such routes.
+The holder declares that the five sites partition the whole. What the
+released sites leave of the whole is then one withheld site, so one more
+site is withheld to break the route.
+
+```{r suppress}
+cells <- data.frame(node = "fit", field = "mean_yield",
+                    unit = c("all", site$site),
+                    value = c(mean(d$yield), site$yield),
+                    status = c(rep("released", 5), "withheld"),
+                    n_units = c(sum(n), n))
+parts <- data.frame(parent = "all", child = site$site)
+res <- suppress_return(cells, partitions = parts, k = 25)
+res$changes[, c("unit", "status", "rule")]
+res$cells[, c("unit", "status")]
+```
+
+With two sites withheld, the released values give their combined mean but
+neither one alone. The check finds only the routes it is told about, here
+the declared partition, and those it searches for by itself.
+
+## Step 5: every number in the report traced to the return
+
+The composer writes the report from the return. A value is written as a
+reference, `{{<node>:<field>}}`, and `trace_report()` fills it in. Any
+number written out must match a value of the return at the digits shown,
+or be declared in `allow` as not a result, such as the plot count or a
+nitrogen rate.
+
+A number the composer worked out for itself does not trace, and the report
+is blocked. Here the draft gives the gain from a 150 kg/ha dressing, a
+number the run never computed:
+
+```{r trace_blocked}
+draft <- c(
+  "Across 136 plots, yield rose by {{fit:slope}} t/ha for each kg/ha of",
+  "nitrogen, so a 150 kg/ha dressing added about 3.5 t/ha. Mean yield was",
+  "{{fit:mean_yield}} t/ha.")
+blocked <- trace_report(draft, ret1, allow = c(136, 150), run = run)
+blocked$released
+blocked$trace[blocked$trace$status == "untraced",
+              c("line", "shown", "status", "reason")]
+```
+
+A number the report needs in another form is computed in the run, so that
+it too is a value of the return. The tool already returns the gain per
+100 kg/ha as `slope_per_100`, and the report refers to it instead.
+
+```{r trace_released}
+report <- c(
+  "Across 136 plots, yield rose by {{fit:slope}} t/ha for each kg/ha of",
+  "nitrogen, about {{fit:slope_per_100}} t/ha per 100 kg/ha. Mean yield",
+  "was {{fit:mean_yield}} t/ha.")
+traced <- trace_report(report, ret1, allow = c(136, 100), run = run)
+traced$released
+cat(traced$text, sep = "\n")
+traced$trace[, c("shown", "status", "node", "field", "value")]
+```
+
+The trace carries the plan and input hashes of the return, so every
+number in the released report points back to one run of one plan on one
+table.
+
+## Reference
+
+Hernandez, J. A., & Mulla, D. J. (2008). Estimating uncertainty of
+economically optimum fertilizer rates. *Agronomy Journal*, *100*(5),
+1221–1229. <https://doi.org/10.2134/agronj2007.0273>

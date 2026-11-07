@@ -80,7 +80,7 @@ test_that("plan_returns reads every declared field of a node's returns", {
   p <- checks_plan(list(), returns = list(
     list(field = "slope", dose = 1, unit = "kg N/ha", digits = 3),
     list(field = "params.estimate", dose = 2, n_units_field = "n_trials")))
-  r <- plan_returns(p)
+  expect_warning(r <- plan_returns(p), "no declared unit: fit.params.estimate")
   expect_identical(names(r), c("node", "field", "dose", "unit",
                                "n_units_field", "digits"))
   expect_identical(r$field, c("slope", "params.estimate"))
@@ -98,7 +98,7 @@ test_that("the declared unit reaches the coordinate scan", {
     list(field = "eonr", dose = 1, unit = "kg N/ha"),
     list(field = "spot", dose = 1)))
   ret <- run_return(conduct(p, verbose = FALSE), dose = 1,
-                    requests = plan_returns(p),
+                    requests = suppressWarnings(plan_returns(p)),
                     checker = default_checker(coord_bands = bands_au))
   expect_identical(ret$values$field, "eonr")
   expect_identical(ret$refused$field, "spot")
@@ -113,7 +113,7 @@ test_that("the unit count is read from the declared field and nowhere else", {
     list(field = "gap", dose = 1, n_units_field = "absent"),
     list(field = "params.estimate", dose = 1, n_units_field = "n_trials")))
   ret <- run_return(conduct(p, verbose = FALSE), dose = 1,
-                    requests = plan_returns(p),
+                    requests = suppressWarnings(plan_returns(p)),
                     checker = default_checker(k = 5))
   # slope rests on 12 trials, not on its own attribute of 2
   expect_identical(ret$values$value[ret$values$field == "slope"], "0.31")
@@ -211,7 +211,7 @@ test_that("numbers are rounded to the declared significant figures", {
     list(field = "a", dose = 1, digits = 3),
     list(field = "b", dose = 1)))
   run <- conduct(p, verbose = FALSE)
-  ret <- run_return(run, dose = 1, requests = plan_returns(p), digits = 5)
+  ret <- run_return(run, dose = 1, requests = suppressWarnings(plan_returns(p)), digits = 5)
   v <- stats::setNames(ret$values$value, ret$values$field)
   expect_identical(v[["a"]], "0.318")
   expect_identical(v[["b"]], "1234.6")

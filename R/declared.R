@@ -349,6 +349,15 @@ plan_returns <- function(plan) {
   out$dose <- as.numeric(out$dose)
   for (k in c("unit", "n_units_field")) out[[k]] <- as.character(out[[k]])
   out$digits <- as.integer(out$digits)
+  no_unit <- is.na(out$unit)
+  if (any(no_unit)) {
+    warning(sprintf(paste0(
+      "returns with no declared unit: %s. An undeclared value is scanned ",
+      "as a possible coordinate; declare its unit (unit: count, unit: ",
+      "label for text). conductoR 0.4.0 will require a unit."),
+      paste(out$node[no_unit], out$field[no_unit], sep = ".",
+            collapse = ", ")), call. = FALSE)
+  }
   out
 }
 

@@ -619,12 +619,17 @@ default_checker <- function(k = 5, dominance = 0.6,
 # A requested field: `metrics.<name>`, `params.<column>`, a bare metric
 # name, or `params.<column>[<key>=<value>,...]` for the rows of one kind.
 # The unit count comes from `n_units_field` when one is declared, and only
-# from there; the declared unit travels as the `unit` attribute.
+# from there; the declared unit travels as the `unit` attribute. A count
+# declared as `<node>.<metric>`, where `<node>` is a node of the run, is
+# read from that node's metrics (`run_ids`, `bus`).
 .request_value <- function(m, field, unit = NA_character_,
-                           n_units_field = NA_character_) {
+                           n_units_field = NA_character_,
+                           run_ids = character(0), bus = list()) {
   if (is.null(m)) return(NULL)
   pf <- .parse_request_field(field)
   has_nf <- !is.na(n_units_field)
+  other <- if (has_nf) .other_node_count(n_units_field, run_ids, bus)
+           else NULL
   if (startsWith(pf$field, "params.")) {
     col <- sub("^params\\.", "", pf$field)
     tab <- as.data.frame(m@params, stringsAsFactors = FALSE)
@@ -635,7 +640,10 @@ default_checker <- function(k = 5, dominance = 0.6,
       if (!nrow(tab)) return(NULL)
     }
     v <- tab[, col, drop = FALSE]
-    if (has_nf) {
+    if (!is.null(other)) {
+      v$n_units <- if (length(other$n) %in% c(1L, nrow(tab))) other$n
+                   else NA_real_
+    } else if (has_nf) {
       if (n_units_field %in% names(tab)) v$n_units <- tab[[n_units_field]]
     } else if ("n_units" %in% names(tab)) {
       v$n_units <- tab$n_units
@@ -649,13 +657,28 @@ default_checker <- function(k = 5, dominance = 0.6,
     v <- metrics[[sub("^metrics\\.", "", pf$field)]]
     if (is.null(v) || !is.atomic(v)) return(NULL)
     if (has_nf) {
-      n <- metrics[[n_units_field]]
+      n <- if (!is.null(other)) other$n else metrics[[n_units_field]]
       attr(v, "n_units") <- if (is.numeric(n) && length(n) == 1L) n
                             else NA_real_
     }
   }
   if (!is.na(unit)) attr(v, "unit") <- unit
   v
+}
+
+# A unit count declared on another node, `<node>.<metric>`: NULL when the
+# prefix is not a node of the run, else `list(n)` with `n` the metric, or
+# NA when that node did not run or has no numeric metric of that name.
+.other_node_count <- function(n_units_field, run_ids, bus) {
+  at <- regexpr(".", n_units_field, fixed = TRUE)
+  if (at < 2L) return(NULL)
+  id <- substr(n_units_field, 1L, at - 1L)
+  if (!id %in% run_ids) return(NULL)
+  metric <- substr(n_units_field, at + 1L, nchar(n_units_field))
+  m <- bus[[id]]
+  n <- if (is.null(m)) NULL else m@summary$metrics[[metric]]
+  if (!is.numeric(n) || !length(n)) n <- NA_real_
+  list(n = n)
 }
 
 # The text of a returned value: numbers to `digits` significant figures,
@@ -677,9 +700,25 @@ default_checker <- function(k = 5, dominance = 0.6,
   n
 }
 
-# The values of the previous round, from a return or its written file.
+# The values of every earlier round, one table per round, from returns or
+# their written files: `previous` is one of them or a list of them.
+.previous_rounds <- function(previous) {
+  if (is.null(previous)) return(list())
+  one <- inherits(previous, "conductoR_return") ||
+    (is.character(previous) && length(previous) == 1L)
+  rounds <- if (one) list(previous) else if (is.character(previous))
+              as.list(previous) else previous
+  if (!is.list(rounds)) .bad_previous()
+  lapply(rounds, .previous_values)
+}
+
+.bad_previous <- function() {
+  stop("previous must be a return from run_return(), the path of one ",
+       "written by write_return(), or a list of them", call. = FALSE)
+}
+
+# The values of one earlier round, from a return or its written file.
 .previous_values <- function(previous) {
-  if (is.null(previous)) return(NULL)
   if (inherits(previous, "conductoR_return")) return(previous$values)
   if (is.character(previous) && length(previous) == 1L &&
       file.exists(previous)) {
@@ -692,8 +731,14 @@ default_checker <- function(k = 5, dominance = 0.6,
     return(utils::read.csv(text = vals, colClasses = "character",
                            na.strings = character(0)))
   }
-  stop("previous must be a return from run_return() or the path of one ",
-       "written by write_return()", call. = FALSE)
+  .bad_previous()
+}
+
+# The rows of one field in each earlier round that returned it.
+.earlier <- function(prev, node, field) {
+  out <- lapply(prev, function(p) p[p$node == node & p$field == field, ,
+                                    drop = FALSE])
+  Filter(nrow, out)
 }
 
 # The checker's verdict on one value: NA_character_ or one reason.
@@ -742,11 +787,12 @@ default_checker <- function(k = 5, dominance = 0.6,
 #'   belongs to, or `NULL`.
 #' @param round The round of the series, a whole number, or `NULL`.
 #' @param checks Passed to [run_record()].
-#' @param previous The previous round of the series, as a return from
-#'   [run_return()] or the path of one written by [write_return()], or
-#'   `NULL` for no differencing.
-#' @param k_diff The smallest number of units a value changed since the
-#'   previous round may rest on. Used only with `previous`.
+#' @param previous The earlier rounds of the series, each a return from
+#'   [run_return()] or the path of one written by [write_return()]: one of
+#'   them, a list of them, or a character vector of paths. `NULL` for no
+#'   differencing.
+#' @param k_diff The smallest number of units a value changed since an
+#'   earlier round may rest on. Used only with `previous`.
 #' @param digits The significant figures of returned numbers, unless a
 #'   request declares its own.
 #'
@@ -763,9 +809,10 @@ default_checker <- function(k = 5, dominance = 0.6,
 #'
 #' @section Reasons a value is not returned:
 #' `above_dose` (the request needs a higher dose than the return),
-#' `not_available` (the node did not run, has no such field, or no row
-#' passes the row filter), `differencing` (see below), and whatever reason
-#' the checker gives.
+#' `node_refused` (the node refused, so it returns its refusal in the record
+#' and nothing else), `not_available` (the node did not run, has no such
+#' field, or no row passes the row filter), `differencing` (see below), and
+#' whatever reason the checker gives.
 #'
 #' @section Rows of a params field:
 #' A `params` field is checked row by row: the checker sees each row with
@@ -784,7 +831,10 @@ default_checker <- function(k = 5, dominance = 0.6,
 #' rate or a price for coordinates only when it is declared as one.
 #' `n_units_field` names the metric, or the `params` column, that holds the
 #' unit count; when it is declared the count is read from there and nowhere
-#' else, and a missing field is no count. `digits` rounds the value's
+#' else, and a missing field is no count. Written `<node>.<metric>`, where
+#' `<node>` is another node of the run, it names a metric of that node, as
+#' in `fidelity.n_trials`; a node that did not run, or has no such metric,
+#' gives no count. `digits` rounds the value's
 #' numbers to that many significant figures, in place of `digits`.
 #'
 #' A `params` field may carry a row filter, `params.<column>[<key>=<value>]`,
@@ -793,16 +843,18 @@ default_checker <- function(k = 5, dominance = 0.6,
 #' those rows alone, so rows of two kinds in one table are requested apart.
 #'
 #' @section Differencing across rounds:
-#' Given the `previous` round of the series, a value that passes the checker
-#' is compared with the value returned there under the same node and field.
-#' When it changed, it is returned only if every row rests on at least
-#' `k_diff` units; otherwise it is refused as `differencing`, since the
-#' change between two rounds can reveal the few units behind it. A value
-#' missing in both rounds is unchanged. A field the previous round did not
-#' return is not compared. The rows of a `params` field are compared one by
+#' Given the earlier rounds of the series in `previous`, a value that passes
+#' the checker is compared with the value returned in each of them under the
+#' same node and field. When it changed since any of them, it is returned
+#' only if every row rests on at least `k_diff` units; otherwise it is
+#' refused as `differencing`, since the change between two rounds can reveal
+#' the few units behind it. Comparing with every earlier round, not only the
+#' last, closes the route through a round that withheld the value. A value
+#' missing in both rounds is unchanged. A round that did not return the
+#' field is not compared with. The rows of a `params` field are compared one by
 #' one, by `index`: a changed row resting on fewer than `k_diff` units is
 #' withheld as `differencing` and the other rows are returned, and a row
-#' the previous round did not return is not compared.
+#' an earlier round did not return is not compared with that round.
 #'
 #' @seealso [run_record()], [write_return()], [series_report()],
 #'   [plan_returns()], [default_checker()].
@@ -840,8 +892,9 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
               round >= 1, round == round(round))
   }
   record <- run_record(run, triggers = triggers, checks = checks)
-  reqs <- .check_requests(requests, .run_node_ids(run))
-  prev <- .previous_values(previous)
+  run_ids <- .run_node_ids(run)
+  reqs <- .check_requests(requests, run_ids)
+  prev <- .previous_rounds(previous)
 
   # Each requested field: withheld, refused or returned ----------------------
   values <- list()
@@ -850,11 +903,14 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     r <- reqs[i, ]
     why <- NA_character_
     v <- NULL
+    m <- run$bus[[r$node]]
     if (r$dose > dose) {
       why <- "above_dose"
+    } else if (!is.null(m) && .abstained(m)) {
+      why <- "node_refused"
     } else {
-      v <- .request_value(run$bus[[r$node]], r$field, r$unit,
-                          r$n_units_field)
+      v <- .request_value(m, r$field, r$unit, r$n_units_field,
+                          run_ids = run_ids, bus = run$bus)
       if (is.null(v) || (is.data.frame(v) && !nrow(v))) {
         why <- "not_available"
       } else if (!is.data.frame(v)) {
@@ -870,12 +926,9 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
         attr(vj, "unit") <- unit_attr
         .check_one(checker, vj)
       }, character(1))
-      before <- if (is.null(prev)) NULL
-                else prev[prev$node == r$node & prev$field == r$field, ,
-                          drop = FALSE]
-      if (!is.null(before) && nrow(before)) {
+      n <- rep_len(.value_units(v), length(fv))
+      for (before in .earlier(prev, r$node, r$field)) {
         old <- before$value[match(seq_along(fv), as.integer(before$index))]
-        n <- rep_len(.value_units(v), length(fv))
         thin <- is.na(row_why) & !is.na(old) & !.same_text(fv, old) &
           (is.na(n) | n < k_diff)
         row_why[thin] <- "differencing"
@@ -897,13 +950,10 @@ run_return <- function(run, triggers = NULL, dose = 0, requests = NULL,
     }
     if (is.na(why)) {
       fv <- .format_values(v, if (is.na(r$digits)) digits else r$digits)
-      before <- if (is.null(prev)) NULL
-                else prev[prev$node == r$node & prev$field == r$field, ,
-                          drop = FALSE]
-      if (!is.null(before) && nrow(before)) {
+      n <- rep_len(.value_units(v), length(fv))
+      for (before in .earlier(prev, r$node, r$field)) {
         old <- before$value[match(seq_along(fv), as.integer(before$index))]
         changed <- length(fv) != nrow(before) | !.same_text(fv, old)
-        n <- rep_len(.value_units(v), length(fv))
         if (any(changed & (is.na(n) | n < k_diff))) why <- "differencing"
       }
     }

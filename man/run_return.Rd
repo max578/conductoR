@@ -47,12 +47,13 @@ belongs to, or \code{NULL}.}
 
 \item{checks}{Passed to \code{\link[=run_record]{run_record()}}.}
 
-\item{previous}{The previous round of the series, as a return from
-\code{\link[=run_return]{run_return()}} or the path of one written by \code{\link[=write_return]{write_return()}}, or
-\code{NULL} for no differencing.}
+\item{previous}{The earlier rounds of the series, each a return from
+\code{\link[=run_return]{run_return()}} or the path of one written by \code{\link[=write_return]{write_return()}}: one of
+them, a list of them, or a character vector of paths. \code{NULL} for no
+differencing.}
 
-\item{k_diff}{The smallest number of units a value changed since the
-previous round may rest on. Used only with \code{previous}.}
+\item{k_diff}{The smallest number of units a value changed since an
+earlier round may rest on. Used only with \code{previous}.}
 
 \item{digits}{The significant figures of returned numbers, unless a
 request declares its own.}
@@ -79,9 +80,10 @@ reason and never returned.
 \section{Reasons a value is not returned}{
 
 \code{above_dose} (the request needs a higher dose than the return),
-\code{not_available} (the node did not run, has no such field, or no row
-passes the row filter), \code{differencing} (see below), and whatever reason
-the checker gives.
+\code{node_refused} (the node refused, so it returns its refusal in the record
+and nothing else), \code{not_available} (the node did not run, has no such
+field, or no row passes the row filter), \code{differencing} (see below), and
+whatever reason the checker gives.
 }
 
 \section{Rows of a params field}{
@@ -104,7 +106,10 @@ attribute before the checker sees it, so \code{\link[=default_checker]{default_c
 rate or a price for coordinates only when it is declared as one.
 \code{n_units_field} names the metric, or the \code{params} column, that holds the
 unit count; when it is declared the count is read from there and nowhere
-else, and a missing field is no count. \code{digits} rounds the value's
+else, and a missing field is no count. Written \verb{<node>.<metric>}, where
+\verb{<node>} is another node of the run, it names a metric of that node, as
+in \code{fidelity.n_trials}; a node that did not run, or has no such metric,
+gives no count. \code{digits} rounds the value's
 numbers to that many significant figures, in place of \code{digits}.
 
 A \code{params} field may carry a row filter, \verb{params.<column>[<key>=<value>]},
@@ -115,16 +120,18 @@ those rows alone, so rows of two kinds in one table are requested apart.
 
 \section{Differencing across rounds}{
 
-Given the \code{previous} round of the series, a value that passes the checker
-is compared with the value returned there under the same node and field.
-When it changed, it is returned only if every row rests on at least
-\code{k_diff} units; otherwise it is refused as \code{differencing}, since the
-change between two rounds can reveal the few units behind it. A value
-missing in both rounds is unchanged. A field the previous round did not
-return is not compared. The rows of a \code{params} field are compared one by
+Given the earlier rounds of the series in \code{previous}, a value that passes
+the checker is compared with the value returned in each of them under the
+same node and field. When it changed since any of them, it is returned
+only if every row rests on at least \code{k_diff} units; otherwise it is
+refused as \code{differencing}, since the change between two rounds can reveal
+the few units behind it. Comparing with every earlier round, not only the
+last, closes the route through a round that withheld the value. A value
+missing in both rounds is unchanged. A round that did not return the
+field is not compared with. The rows of a \code{params} field are compared one by
 one, by \code{index}: a changed row resting on fewer than \code{k_diff} units is
 withheld as \code{differencing} and the other rows are returned, and a row
-the previous round did not return is not compared.
+an earlier round did not return is not compared with that round.
 }
 
 \examples{

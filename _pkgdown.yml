@@ -30,6 +30,7 @@ reference:
   - suppress_return
   - write_return
   - series_report
+  - trace_report
 - title: Emit a manifest
   contents:
   - lens_to_manifest

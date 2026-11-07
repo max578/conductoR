@@ -4,6 +4,31 @@
 * README carries status badges and lists related packages.
 * CI runs lintr (report-only) and test coverage.
 
+## Tracing the numbers of a report
+
+* `trace_report()` checks a report before release. A reference written
+  `{{<node>:<field>}}` or `{{<node>:<field>:<index>}}` is filled in from the
+  release's values. A number written out in the text is matched against
+  those values at the digits shown, unless it is declared in `allow` (a
+  confidence level, a year). A reference the release does not hold, or a
+  number that matches nothing, blocks the release: the result then carries
+  no text and a trace naming each failure with its reason. With the run
+  given, the trace also names the version of the tool behind each value.
+
+## Rulings from the BT1 replay
+
+* A node that refused returns only its refusal, which is in the record.
+  Every field requested from it is refused as `node_refused`.
+* A unit count may be declared on another node, as
+  `n_units_field = "<node>.<metric>"` (e.g. `fidelity.n_trials`). A node
+  that did not run, or has no such metric, gives no count.
+* `run_return(previous =)` takes every earlier round of the series, as a
+  list of returns or a vector of written files, and refuses a value that
+  changed on few units since any of them, not only the last.
+* `plan_returns()` warns when a declared return has no unit, since an
+  undeclared value is scanned as a possible coordinate. A unit will be
+  required from 0.4.0.
+
 ## Plan language 0.3 and input postconditions
 
 * A plan may declare the tables it reads, in `inputs`, with the
